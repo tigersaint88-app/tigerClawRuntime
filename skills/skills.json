@@ -1,0 +1,137 @@
+[
+  {
+    "id": "file.read_text",
+    "name": "Read text file",
+    "description": "Reads text content from a file",
+    "tags": ["file", "read", "io"],
+    "riskLevel": "low",
+    "executionMode": "local",
+    "prerequisites": { "requiredResources": [], "requiredConfig": [], "requiredAuth": [], "requiredCapabilities": [] }
+  },
+  {
+    "id": "file.write_text",
+    "name": "Write text file",
+    "description": "Writes text content to a file",
+    "tags": ["file", "write", "io"],
+    "riskLevel": "low",
+    "executionMode": "local",
+    "prerequisites": { "requiredResources": [], "requiredConfig": [], "requiredAuth": [], "requiredCapabilities": [] }
+  },
+  {
+    "id": "shell.run",
+    "name": "Run shell command",
+    "description": "Executes a shell command",
+    "tags": ["shell", "exec", "system"],
+    "riskLevel": "medium",
+    "executionMode": "local",
+    "prerequisites": { "requiredResources": [], "requiredConfig": [], "requiredAuth": [], "requiredCapabilities": [] }
+  },
+  {
+    "id": "text.summarize",
+    "name": "Summarize text",
+    "description": "Summarizes text content",
+    "tags": ["text", "summary", "nlp"],
+    "riskLevel": "low",
+    "executionMode": "local",
+    "prerequisites": { "requiredResources": [], "requiredConfig": [], "requiredAuth": [], "requiredCapabilities": [] }
+  },
+  {
+    "id": "memory.save_preference",
+    "name": "Save preference",
+    "description": "Saves a user preference to memory",
+    "tags": ["memory", "preference", "profile"],
+    "riskLevel": "low",
+    "executionMode": "local",
+    "prerequisites": { "requiredResources": [], "requiredConfig": [], "requiredAuth": [], "requiredCapabilities": [] }
+  },
+  {
+    "id": "workflow.run_named",
+    "name": "Run named workflow",
+    "description": "Executes a named workflow",
+    "tags": ["workflow", "orchestration"],
+    "riskLevel": "low",
+    "executionMode": "local",
+    "prerequisites": { "requiredResources": [], "requiredConfig": [], "requiredAuth": [], "requiredCapabilities": [] }
+  },
+  {
+    "id": "human.wait_for_continue",
+    "name": "Human checkpoint",
+    "description": "Waits for user to continue",
+    "tags": ["human", "checkpoint", "interactive"],
+    "riskLevel": "low",
+    "executionMode": "local",
+    "prerequisites": { "requiredResources": [], "requiredConfig": [], "requiredAuth": [], "requiredCapabilities": [] }
+  },
+  {
+    "id": "browser.open_url",
+    "name": "Open URL in browser",
+    "description": "Open and navigate to URL in Playwright browser",
+    "tags": ["browser", "url", "web"],
+    "riskLevel": "medium",
+    "executionMode": "local",
+    "prerequisites": { "requiredResources": [], "requiredConfig": [], "requiredAuth": [], "requiredCapabilities": [] }
+  },
+  {
+    "id": "browser.type",
+    "name": "Type in browser",
+    "description": "Type text into selector",
+    "tags": ["browser", "input", "automation"],
+    "riskLevel": "medium",
+    "executionMode": "local",
+    "prerequisites": { "requiredResources": [], "requiredConfig": [], "requiredAuth": [], "requiredCapabilities": [] }
+  },
+  {
+    "id": "browser.click",
+    "name": "Click in browser",
+    "description": "Click selector in browser",
+    "tags": ["browser", "click", "automation"],
+    "riskLevel": "medium",
+    "executionMode": "local",
+    "prerequisites": { "requiredResources": [], "requiredConfig": [], "requiredAuth": [], "requiredCapabilities": [] }
+  },
+  {
+    "id": "browser.wait_for",
+    "name": "Wait selector",
+    "description": "Wait for selector to appear",
+    "tags": ["browser", "wait", "automation"],
+    "riskLevel": "low",
+    "executionMode": "local",
+    "prerequisites": { "requiredResources": [], "requiredConfig": [], "requiredAuth": [], "requiredCapabilities": [] }
+  },
+  {
+    "id": "browser.extract_text",
+    "name": "Extract browser text",
+    "description": "Extract texts by selector",
+    "tags": ["browser", "extract", "automation"],
+    "riskLevel": "low",
+    "executionMode": "local",
+    "prerequisites": { "requiredResources": [], "requiredConfig": [], "requiredAuth": [], "requiredCapabilities": [] }
+  },
+  {
+    "id": "browser.screenshot",
+    "name": "Browser screenshot",
+    "description": "Capture screenshot to artifacts",
+    "tags": ["browser", "screenshot", "artifact"],
+    "riskLevel": "low",
+    "executionMode": "local",
+    "prerequisites": { "requiredResources": [], "requiredConfig": [], "requiredAuth": [], "requiredCapabilities": [] }
+  },
+  {
+    "id": "email.fetch_unread",
+    "name": "Fetch unread emails",
+    "description": "Fetches unread emails from mailbox",
+    "tags": ["email", "mailbox", "summary"],
+    "riskLevel": "medium",
+    "executionMode": "local",
+    "prerequisites": {
+      "requiredResources": [{ "type": "email_account", "key": "accountId" }],
+      "requiredConfig": [
+        "email.accounts.{accountId}.host",
+        "email.accounts.{accountId}.port",
+        "email.accounts.{accountId}.username"
+      ],
+      "requiredAuth": ["email.accounts.{accountId}.authProfile"],
+      "requiredCapabilities": ["email.read"]
+    }
+  }
+]

@@ -1,0 +1,33 @@
+{
+  "id": "daily_mail_digest",
+  "name": "Daily Mail Digest",
+  "description": "Fetch unread emails and generate summary",
+  "tags": ["email", "digest", "summary"],
+  "steps": [
+    {
+      "id": "s1",
+      "name": "Fetch unread",
+      "skillId": "email.fetch_unread",
+      "inputs": {},
+      "nextStepId": "s2"
+    },
+    {
+      "id": "s2",
+      "name": "Summarize",
+      "skillId": "text.summarize",
+      "inputs": {
+        "text": "{{step.s1}}"
+      },
+      "nextStepId": "s3"
+    },
+    {
+      "id": "s3",
+      "name": "Write to file",
+      "skillId": "file.write_text",
+      "inputs": {
+        "path": "mail_digest.txt",
+        "content": "{{step.s2}}"
+      }
+    }
+  ]
+}

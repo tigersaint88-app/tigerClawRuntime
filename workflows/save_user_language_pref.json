@@ -1,0 +1,17 @@
+{
+  "id": "save_user_language_pref",
+  "name": "Save User Language Preference",
+  "description": "Saves language preference to memory",
+  "tags": ["memory", "preference", "language"],
+  "steps": [
+    {
+      "id": "s1",
+      "name": "Save preference",
+      "skillId": "memory.save_preference",
+      "inputs": {
+        "key": "{{key}}",
+        "value": "{{value}}"
+      }
+    }
+  ]
+}

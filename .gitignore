@@ -1,0 +1,47 @@
+# Build
+bin/
+obj/
+out/
+*.dll
+*.pdb
+*.user
+*.suo
+*.cache
+*.log
+*.vspscc
+*.vssscc
+.build
+*.pidb
+*.sln.docstates
+
+# .NET
+project.lock.json
+project.fragment.lock.json
+artifacts/
+*.nupkg
+*.snupkg
+packages/
+
+# IDE
+.vs/
+.vscode/
+*.swp
+*~
+
+# Data & runtime
+data/
+*.db
+*.db-shm
+*.db-wal
+logs/
+artifacts/
+
+# User-specific
+*.rsuser
+*.user
+*.userosscache
+*.sln.docstates
+
+# OS
+.DS_Store
+Thumbs.db

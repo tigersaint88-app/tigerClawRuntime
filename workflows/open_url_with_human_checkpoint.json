@@ -1,0 +1,25 @@
+{
+  "id": "open_url_with_human_checkpoint",
+  "name": "Open URL with Human Checkpoint",
+  "description": "Opens URL and waits for user to continue",
+  "tags": ["browser", "human", "checkpoint"],
+  "steps": [
+    {
+      "id": "s1",
+      "name": "Open URL",
+      "skillId": "browser.open_url",
+      "inputs": {
+        "url": "{{url}}"
+      },
+      "nextStepId": "s2"
+    },
+    {
+      "id": "s2",
+      "name": "Wait for user",
+      "skillId": "human.wait_for_continue",
+      "inputs": {
+        "instruction": "Please complete any required actions in the browser, then press Enter to continue."
+      }
+    }
+  ]
+}

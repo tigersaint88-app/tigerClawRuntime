@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <RootNamespace>TigerClaw.Capabilities</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\TigerClaw.Core\TigerClaw.Core.csproj" />
+    <ProjectReference Include="..\TigerClaw.Models\TigerClaw.Models.csproj" />
+    <ProjectReference Include="..\TigerClaw.Infrastructure\TigerClaw.Infrastructure.csproj" />
+  </ItemGroup>
+
+</Project>

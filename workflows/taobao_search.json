@@ -1,0 +1,65 @@
+{
+  "id": "taobao_search",
+  "name": "Taobao Search",
+  "description": "Open Taobao and search for a keyword (variable: keyword)",
+  "tags": ["browser", "taobao", "search"],
+  "steps": [
+    {
+      "id": "s1",
+      "name": "Open taobao",
+      "skillId": "browser.open_url",
+      "inputs": { "url": "https://www.taobao.com", "headless": false },
+      "nextStepId": "s2"
+    },
+    {
+      "id": "s2",
+      "name": "Wait search input",
+      "skillId": "browser.wait_for",
+      "inputs": { "selector": "#q, input[name='q']", "timeoutMs": 20000 },
+      "nextStepId": "s3"
+    },
+    {
+      "id": "s3",
+      "name": "Type keyword",
+      "skillId": "browser.type",
+      "inputs": { "selector": "#q, input[name='q']", "text": "{{keyword}}" },
+      "nextStepId": "s4"
+    },
+    {
+      "id": "s4",
+      "name": "Click search",
+      "skillId": "browser.click",
+      "inputs": { "selector": ".btn-search, button[type='submit']" },
+      "nextStepId": "s5"
+    },
+    {
+      "id": "s5",
+      "name": "Wait results",
+      "skillId": "browser.wait_for",
+      "inputs": { "selector": ".item, .items", "timeoutMs": 20000 },
+      "nextStepId": "s6"
+    },
+    {
+      "id": "s6",
+      "name": "Extract titles",
+      "skillId": "browser.extract_text",
+      "inputs": { "selector": ".title, .ctx-box .title", "maxItems": 10 },
+      "nextStepId": "s7"
+    },
+    {
+      "id": "s7",
+      "name": "Save screenshot",
+      "skillId": "browser.screenshot",
+      "inputs": { "fileName": "taobao_search.png" },
+      "nextStepId": "s8"
+    },
+    {
+      "id": "s8",
+      "name": "Human checkpoint",
+      "skillId": "human.wait_for_continue",
+      "inputs": {
+        "instruction": "如果出现验证码，请手动完成后按 Enter 继续。"
+      }
+    }
+  ]
+}

@@ -1,0 +1,35 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+
+    <IsPackable>false</IsPackable>
+    <IsTestProject>true</IsTestProject>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="coverlet.collector" Version="6.0.0" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.8.0" />
+    <PackageReference Include="xunit" Version="2.5.3" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="2.5.3" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="Xunit" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\TigerClaw.Api\TigerClaw.Api.csproj" />
+    <ProjectReference Include="..\..\src\TigerClaw.Cli\TigerClaw.Cli.csproj" />
+    <ProjectReference Include="..\..\src\TigerClaw.Runtime\TigerClaw.Runtime.csproj" />
+    <ProjectReference Include="..\..\src\TigerClaw.Core\TigerClaw.Core.csproj" />
+    <ProjectReference Include="..\..\src\TigerClaw.Models\TigerClaw.Models.csproj" />
+    <ProjectReference Include="..\..\src\TigerClaw.Infrastructure\TigerClaw.Infrastructure.csproj" />
+    <ProjectReference Include="..\..\src\TigerClaw.Memory\TigerClaw.Memory.csproj" />
+    <ProjectReference Include="..\..\src\TigerClaw.Skills\TigerClaw.Skills.csproj" />
+    <ProjectReference Include="..\..\src\TigerClaw.Workflows\TigerClaw.Workflows.csproj" />
+  </ItemGroup>
+
+</Project>

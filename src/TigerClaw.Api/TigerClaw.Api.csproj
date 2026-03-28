@@ -1,0 +1,25 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="8.0.25" />
+    <PackageReference Include="Microsoft.Extensions.Configuration.Json" Version="10.0.5" />
+    <PackageReference Include="Swashbuckle.AspNetCore" Version="6.6.2" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\TigerClaw.Runtime\TigerClaw.Runtime.csproj" />
+    <ProjectReference Include="..\TigerClaw.Core\TigerClaw.Core.csproj" />
+    <ProjectReference Include="..\TigerClaw.Models\TigerClaw.Models.csproj" />
+    <ProjectReference Include="..\TigerClaw.Infrastructure\TigerClaw.Infrastructure.csproj" />
+    <ProjectReference Include="..\TigerClaw.Memory\TigerClaw.Memory.csproj" />
+    <ProjectReference Include="..\TigerClaw.Skills\TigerClaw.Skills.csproj" />
+    <ProjectReference Include="..\TigerClaw.Workflows\TigerClaw.Workflows.csproj" />
+  </ItemGroup>
+
+</Project>

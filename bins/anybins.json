@@ -1,0 +1,6 @@
+{
+  "anyBins": [
+    { "id": "node", "candidates": [ "node", "nodejs" ] },
+    { "id": "python", "candidates": [ "python", "python3" ] }
+  ]
+}
