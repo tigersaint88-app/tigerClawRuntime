@@ -54,7 +54,8 @@ public class RuntimeFacade : Core.IRuntimeFacade
                     RequestId = request.RequestId,
                     Success = false,
                     Message = $"未实现：{routing.Intent}",
-                    ErrorCode = "NOT_IMPLEMENTED"
+                    ErrorCode = "NOT_IMPLEMENTED",
+                    Outcome = TaskOutcomes.Failed
                 };
             }
 
@@ -63,16 +64,7 @@ public class RuntimeFacade : Core.IRuntimeFacade
                 vars[kv.Key] = kv.Value;
             var result = await _engine.ExecuteAsync(plan.WorkflowId, taskId, request.UserId, vars, cancellationToken);
 
-            return new TaskResponse
-            {
-                RequestId = request.RequestId,
-                Success = result.Success,
-                Message = result.Message,
-                FinalText = result.Success ? "Task completed." : result.Message,
-                Artifacts = result.Artifacts.ToList(),
-                WorkflowId = plan.WorkflowId,
-                Steps = result.Steps.ToList()
-            };
+            return FromWorkflowExecution(request.RequestId, result, plan.WorkflowId, "Task completed.");
         }
         catch (Exception ex)
         {
@@ -82,7 +74,8 @@ public class RuntimeFacade : Core.IRuntimeFacade
                 RequestId = request.RequestId,
                 Success = false,
                 Message = ex.Message,
-                ErrorCode = "INTERNAL_ERROR"
+                ErrorCode = "INTERNAL_ERROR",
+                Outcome = TaskOutcomes.Failed
             };
         }
     }
@@ -112,16 +105,60 @@ public class RuntimeFacade : Core.IRuntimeFacade
         var taskId = Guid.NewGuid().ToString("N");
         var uid = userId ?? "local-user";
         var result = await _engine.ExecuteAsync(workflowId, taskId, uid, inputs ?? new Dictionary<string, object?>(), cancellationToken);
+        return FromWorkflowExecution(taskId, result, workflowId, "Workflow completed.");
+    }
+
+    private static TaskResponse FromWorkflowExecution(
+        string requestId,
+        Core.WorkflowExecutionResult result,
+        string? workflowId,
+        string completedFinalText)
+    {
+        var interaction = result.InteractionMessage
+            ?? (result.Issues.Count > 0 ? PrerequisiteInteractionFormatter.Format(result.Issues, result.Message) : null);
+
+        var outcome = result.WaitingHuman
+            ? TaskOutcomes.NeedsUserInput
+            : (result.Success ? TaskOutcomes.Completed : TaskOutcomes.Failed);
+
+        var finalText = result.WaitingHuman
+            ? (interaction ?? result.Message ?? "请补齐配置后重新运行工作流。")
+            : (result.Success ? completedFinalText : result.Message);
+
         return new TaskResponse
         {
-            RequestId = taskId,
+            RequestId = requestId,
             Success = result.Success,
             Message = result.Message,
-            FinalText = result.Success ? "Workflow completed." : result.Message,
+            FinalText = finalText,
             Artifacts = result.Artifacts.ToList(),
             WorkflowId = workflowId,
-            Steps = result.Steps.ToList()
+            Steps = result.Steps.ToList(),
+            ErrorCode = result.ErrorCode,
+            WaitingHuman = result.WaitingHuman,
+            Issues = result.Issues.ToList(),
+            InteractionMessage = interaction,
+            Outcome = outcome,
+            RequiresUserInput = result.WaitingHuman,
+            SuggestedPreferenceKeys = ExtractSuggestedPreferenceKeys(result.Issues),
+            RemediationHint = result.WaitingHuman ? ClientRemediationHints.PreferencesThenRerun : null
         };
+    }
+
+    private static IReadOnlyList<string> ExtractSuggestedPreferenceKeys(IReadOnlyList<PrerequisiteIssue> issues)
+    {
+        if (issues.Count == 0) return Array.Empty<string>();
+        var set = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var i in issues)
+        {
+            if (string.IsNullOrWhiteSpace(i.Key)) continue;
+            if (string.Equals(i.Kind, "preference", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(i.Kind, "network", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(i.Kind, "resource", StringComparison.OrdinalIgnoreCase))
+                set.Add(i.Key.Trim());
+        }
+
+        return set.OrderBy(x => x, StringComparer.OrdinalIgnoreCase).ToList();
     }
 
     public Task<IReadOnlyList<SkillDefinition>> ListSkillsAsync(CancellationToken cancellationToken = default)

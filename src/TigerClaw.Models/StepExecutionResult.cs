@@ -12,4 +12,7 @@ public record StepExecutionResult
     public string? ArtifactPath { get; init; }
     public DateTime? CompletedAtUtc { get; init; }
     public int? RetryCount { get; init; }
+
+    public string? ErrorCode { get; init; }
+    public IReadOnlyList<PrerequisiteIssue> Issues { get; init; } = Array.Empty<PrerequisiteIssue>();
 }

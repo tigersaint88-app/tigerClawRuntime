@@ -32,7 +32,20 @@ public static class CapabilityResolver
                 var host = await preferences.GetAsync($"email.accounts.{account}.host", userId, cancellationToken).ConfigureAwait(false);
                 var user = await preferences.GetAsync($"email.accounts.{account}.username", userId, cancellationToken).ConfigureAwait(false);
                 if (!string.IsNullOrWhiteSpace(host) && !string.IsNullOrWhiteSpace(user))
-                    observed.Add(CapabilityIds.EmailRead);
+                {
+                    var password = await preferences.GetAsync($"email.accounts.{account}.password", userId, cancellationToken).ConfigureAwait(false);
+                    if (string.IsNullOrWhiteSpace(password))
+                    {
+                        var profile = await preferences.GetAsync($"email.accounts.{account}.authProfile", userId, cancellationToken).ConfigureAwait(false);
+                        if (!string.IsNullOrWhiteSpace(profile))
+                        {
+                            password = await preferences.GetAsync($"email.auth_profiles.{profile.Trim()}.password", userId, cancellationToken).ConfigureAwait(false);
+                        }
+                    }
+
+                    if (!string.IsNullOrWhiteSpace(password))
+                        observed.Add(CapabilityIds.EmailRead);
+                }
             }
         }
 

@@ -1,0 +1,13 @@
+<Project>
+  <PropertyGroup>
+    <Version>1.0.0</Version>
+    <Authors>tigersaint88-app</Authors>
+    <Company>tigersaint88-app</Company>
+    <Product>TigerClaw Runtime</Product>
+    <Copyright>Copyright © tigersaint88-app</Copyright>
+    <RepositoryUrl>https://github.com/tigersaint88-app/tigerClawRuntime</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PackageProjectUrl>https://github.com/tigersaint88-app/tigerClawRuntime</PackageProjectUrl>
+  </PropertyGroup>
+</Project>

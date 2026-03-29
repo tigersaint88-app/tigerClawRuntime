@@ -30,9 +30,13 @@ public class AuditLogger : Core.IAuditLogger
         _logger.LogDebug("Step {StepId} status={Status} taskId={TaskId}", stepId, status, taskId);
     }
 
-    public async Task LogTaskCompleteAsync(string taskId, bool success, string? message = null, CancellationToken cancellationToken = default)
+    public async Task LogTaskCompleteAsync(string taskId, bool success, string? message = null, bool waitingHuman = false, CancellationToken cancellationToken = default)
     {
-        await _repo.LogAsync(taskId, null, "task_complete", message, success ? "success" : "failed", cancellationToken);
-        _logger.LogInformation("Task completed: {TaskId} success={Success}", taskId, success);
+        var outcome = waitingHuman ? "waiting_human" : (success ? "success" : "failed");
+        await _repo.LogAsync(taskId, null, "task_complete", message, outcome, cancellationToken);
+        if (waitingHuman)
+            _logger.LogInformation("Task completed: {TaskId} status=waiting_human (caller should fix preferences and re-run)", taskId);
+        else
+            _logger.LogInformation("Task completed: {TaskId} success={Success}", taskId, success);
     }
 }

@@ -33,9 +33,11 @@ public class WorkflowRunNamedSkill : Core.ISkill
         return new SkillExecutionResult
         {
             Success = result.Success,
-            Message = result.Message,
+            Message = result.Message ?? result.InteractionMessage,
             Output = result.Steps,
-            WaitingHuman = result.WaitingHuman
+            WaitingHuman = result.WaitingHuman,
+            ErrorCode = result.ErrorCode,
+            Issues = result.Issues
         };
     }
 }

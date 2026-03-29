@@ -2,6 +2,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using System.Text.RegularExpressions;
 using TigerClaw.Capabilities;
+using TigerClaw.Capabilities.Resolver;
 using TigerClaw.Infrastructure.Options;
 using TigerClaw.Models;
 
@@ -55,7 +56,12 @@ public class WorkflowEngine : Core.IWorkflowEngine
         if (def == null)
         {
             _logger.LogError("Workflow not found: {WorkflowId}", workflowId);
-            return new Core.WorkflowExecutionResult { Success = false, Message = $"Workflow not found: {workflowId}" };
+            return new Core.WorkflowExecutionResult
+            {
+                Success = false,
+                Message = $"Workflow not found: {workflowId}",
+                ErrorCode = TigerClawErrorCodes.WorkflowNotFound
+            };
         }
 
         await _taskRepo.SaveTaskAsync(taskId, workflowId, userId, null, "running", cancellationToken);
@@ -76,6 +82,9 @@ public class WorkflowEngine : Core.IWorkflowEngine
         var idx = 0;
         var waitingHuman = false;
         string? waitingMessage = null;
+        string? workflowErrorCode = null;
+        IReadOnlyList<PrerequisiteIssue> workflowIssues = Array.Empty<PrerequisiteIssue>();
+        string? workflowInteractionMessage = null;
 
         while (current != null)
         {
@@ -93,25 +102,36 @@ public class WorkflowEngine : Core.IWorkflowEngine
 
             var skillDef = _skillRegistry.GetDefinition(current.SkillId);
 
-            var (prerequisitesOk, prereqMessage) = await EnsurePrerequisitesAsync(skillDef, variables, context, cancellationToken);
+            var (prerequisitesOk, prereqMessage, prereqIssues) = await EnsurePrerequisitesAsync(skillDef, variables, context, cancellationToken);
             if (!prerequisitesOk)
             {
                 waitingHuman = true;
                 waitingMessage = prereqMessage;
+                workflowErrorCode = TigerClawErrorCodes.PrerequisiteMissing;
+                workflowIssues = prereqIssues;
+                workflowInteractionMessage = PrerequisiteInteractionFormatter.Format(prereqIssues, prereqMessage);
 
+                var structured = new
+                {
+                    errorCode = workflowErrorCode,
+                    issues = prereqIssues,
+                    interactionMessage = workflowInteractionMessage
+                };
                 var prereqStepResult = new StepExecutionResult
                 {
                     StepId = current.Id,
                     Status = "waiting_human",
                     Message = prereqMessage,
-                    Output = null,
+                    Output = structured,
                     ArtifactPath = null,
-                    CompletedAtUtc = DateTime.UtcNow
+                    CompletedAtUtc = DateTime.UtcNow,
+                    ErrorCode = workflowErrorCode,
+                    Issues = prereqIssues
                 };
 
                 stepResults[current.Id] = prereqStepResult;
                 await _taskRepo.SaveStepAsync(taskId, prereqStepResult, cancellationToken);
-                await _audit.LogStepAsync(taskId, current.Id, prereqStepResult.Status, prereqStepResult.Message, null, cancellationToken);
+                await _audit.LogStepAsync(taskId, current.Id, prereqStepResult.Status, prereqStepResult.Message, structured, cancellationToken);
                 break;
             }
 
@@ -127,33 +147,77 @@ public class WorkflowEngine : Core.IWorkflowEngine
             if (!preflight.Allowed)
             {
                 var failMsg = string.Join("; ", preflight.Diagnostics.Select(d => d.Message));
-                var fail = new StepExecutionResult
+                var hardDenied = preflight.Diagnostics.Any(d =>
+                    string.Equals(d.Code, "blocked_by_policy", StringComparison.OrdinalIgnoreCase)
+                    || string.Equals(d.Code, "none_of_violation", StringComparison.OrdinalIgnoreCase));
+
+                if (hardDenied)
+                {
+                    var fail = new StepExecutionResult
+                    {
+                        StepId = current.Id,
+                        Status = "failed",
+                        Message = $"Capability preflight failed: {failMsg}",
+                        Output = preflight.Diagnostics,
+                        CompletedAtUtc = DateTime.UtcNow,
+                        ErrorCode = TigerClawErrorCodes.CapabilityNotMet,
+                        Issues = MapCapabilityDiagnostics(preflight.Diagnostics, skillDef?.Id)
+                    };
+                    stepResults[current.Id] = fail;
+                    await _taskRepo.SaveStepAsync(taskId, fail, cancellationToken);
+                    await _audit.LogStepAsync(taskId, current.Id, "failed", fail.Message, fail.Output, cancellationToken);
+                    await _taskRepo.UpdateTaskStatusAsync(taskId, "failed", DateTime.UtcNow.ToString("O"), cancellationToken);
+                    await _audit.LogTaskCompleteAsync(taskId, false, fail.Message, false, cancellationToken);
+                    return new Core.WorkflowExecutionResult
+                    {
+                        Success = false,
+                        Message = fail.Message,
+                        Steps = stepResults.Values.ToList(),
+                        Artifacts = artifacts,
+                        WaitingHuman = false,
+                        ErrorCode = TigerClawErrorCodes.CapabilityNotMet,
+                        Issues = fail.Issues,
+                        InteractionMessage = PrerequisiteInteractionFormatter.Format(fail.Issues, fail.Message)
+                    };
+                }
+
+                waitingHuman = true;
+                waitingMessage = $"Capability preflight failed: {failMsg}";
+                workflowErrorCode = TigerClawErrorCodes.CapabilityNotMet;
+                workflowIssues = MapCapabilityDiagnostics(preflight.Diagnostics, skillDef?.Id);
+                workflowInteractionMessage = PrerequisiteInteractionFormatter.Format(workflowIssues, waitingMessage);
+                var capStructured = new
+                {
+                    errorCode = workflowErrorCode,
+                    issues = workflowIssues,
+                    interactionMessage = workflowInteractionMessage
+                };
+                var capStep = new StepExecutionResult
                 {
                     StepId = current.Id,
-                    Status = "failed",
-                    Message = $"Capability preflight failed: {failMsg}",
-                    Output = preflight.Diagnostics,
-                    CompletedAtUtc = DateTime.UtcNow
+                    Status = "waiting_human",
+                    Message = waitingMessage,
+                    Output = capStructured,
+                    CompletedAtUtc = DateTime.UtcNow,
+                    ErrorCode = workflowErrorCode,
+                    Issues = workflowIssues
                 };
-                stepResults[current.Id] = fail;
-                await _taskRepo.SaveStepAsync(taskId, fail, cancellationToken);
-                await _audit.LogStepAsync(taskId, current.Id, "failed", fail.Message, fail.Output, cancellationToken);
-                await _taskRepo.UpdateTaskStatusAsync(taskId, "failed", DateTime.UtcNow.ToString("O"), cancellationToken);
-                await _audit.LogTaskCompleteAsync(taskId, false, fail.Message, cancellationToken);
-                return new Core.WorkflowExecutionResult
-                {
-                    Success = false,
-                    Message = fail.Message,
-                    Steps = stepResults.Values.ToList(),
-                    Artifacts = artifacts,
-                    WaitingHuman = false
-                };
+                stepResults[current.Id] = capStep;
+                await _taskRepo.SaveStepAsync(taskId, capStep, cancellationToken);
+                await _audit.LogStepAsync(taskId, current.Id, capStep.Status, capStep.Message, capStructured, cancellationToken);
+                break;
             }
 
             var skill = _skillRegistry.GetSkill(current.SkillId);
             if (skill == null)
             {
-                var fail = new StepExecutionResult { StepId = current.Id, Status = "failed", Message = $"Skill not found: {current.SkillId}" };
+                var fail = new StepExecutionResult
+                {
+                    StepId = current.Id,
+                    Status = "failed",
+                    Message = $"Skill not found: {current.SkillId}",
+                    ErrorCode = TigerClawErrorCodes.SkillNotFound
+                };
                 stepResults[current.Id] = fail;
                 await _taskRepo.SaveStepAsync(taskId, fail, cancellationToken);
                 await _audit.LogStepAsync(taskId, current.Id, "failed", fail.Message, null, cancellationToken);
@@ -161,31 +225,62 @@ public class WorkflowEngine : Core.IWorkflowEngine
             }
 
             var result = await skill.ExecuteAsync(stepInputs, context, cancellationToken);
+            var stepIssues = result.Issues.Count > 0 ? result.Issues : Array.Empty<PrerequisiteIssue>();
+            var stepInteraction = stepIssues.Count > 0
+                ? PrerequisiteInteractionFormatter.Format(stepIssues, result.Message)
+                : null;
+            var mergedOutput = result.Output;
+            if (result.WaitingHuman && (result.ErrorCode != null || stepIssues.Count > 0))
+            {
+                mergedOutput = new
+                {
+                    errorCode = result.ErrorCode,
+                    issues = stepIssues,
+                    interactionMessage = stepInteraction ?? result.Message,
+                    detail = result.Output
+                };
+            }
+
             var stepResult = new StepExecutionResult
             {
                 StepId = current.Id,
                 Status = result.WaitingHuman ? "waiting_human" : (result.Success ? "success" : "failed"),
                 Message = result.Message,
-                Output = result.Output,
+                Output = mergedOutput,
                 ArtifactPath = result.ArtifactPath,
-                CompletedAtUtc = DateTime.UtcNow
+                CompletedAtUtc = DateTime.UtcNow,
+                ErrorCode = result.ErrorCode,
+                Issues = stepIssues
             };
             stepResults[current.Id] = stepResult;
             await _taskRepo.SaveStepAsync(taskId, stepResult, cancellationToken);
-            await _audit.LogStepAsync(taskId, current.Id, stepResult.Status, result.Message, result.Output, cancellationToken);
+            await _audit.LogStepAsync(taskId, current.Id, stepResult.Status, result.Message, mergedOutput, cancellationToken);
 
             if (result.ArtifactPath != null) artifacts.Add(result.ArtifactPath);
             if (result.WaitingHuman)
             {
                 waitingHuman = true;
                 waitingMessage = result.Message ?? "等待用户确认...";
+                workflowErrorCode = result.ErrorCode ?? workflowErrorCode;
+                workflowIssues = stepIssues.Count > 0 ? stepIssues : workflowIssues;
+                workflowInteractionMessage = stepInteraction ?? workflowInteractionMessage ?? PrerequisiteInteractionFormatter.Format(workflowIssues, waitingMessage);
                 break;
             }
             if (!result.Success)
             {
                 await _taskRepo.UpdateTaskStatusAsync(taskId, "failed", DateTime.UtcNow.ToString("O"), cancellationToken);
-                await _audit.LogTaskCompleteAsync(taskId, false, result.Message, cancellationToken);
-                return new Core.WorkflowExecutionResult { Success = false, Message = result.Message, Steps = stepResults.Values.ToList(), Artifacts = artifacts, WaitingHuman = false };
+                await _audit.LogTaskCompleteAsync(taskId, false, result.Message, false, cancellationToken);
+                return new Core.WorkflowExecutionResult
+                {
+                    Success = false,
+                    Message = result.Message,
+                    Steps = stepResults.Values.ToList(),
+                    Artifacts = artifacts,
+                    WaitingHuman = false,
+                    ErrorCode = result.ErrorCode,
+                    Issues = stepIssues,
+                    InteractionMessage = stepInteraction
+                };
             }
 
             if (result.Output != null) variables[$"step.{current.Id}"] = result.Output;
@@ -201,7 +296,7 @@ public class WorkflowEngine : Core.IWorkflowEngine
         var success = !hasFailed && !waitingHuman;
         var finalStatus = waitingHuman ? "waiting_human" : (success ? "success" : "failed");
         await _taskRepo.UpdateTaskStatusAsync(taskId, finalStatus, DateTime.UtcNow.ToString("O"), cancellationToken);
-        await _audit.LogTaskCompleteAsync(taskId, success, waitingHuman ? waitingMessage : null, cancellationToken);
+        await _audit.LogTaskCompleteAsync(taskId, success, waitingHuman ? waitingMessage : null, waitingHuman, cancellationToken);
 
         return new Core.WorkflowExecutionResult
         {
@@ -209,17 +304,43 @@ public class WorkflowEngine : Core.IWorkflowEngine
             Message = waitingHuman ? waitingMessage : null,
             Steps = stepResults.Values.ToList(),
             Artifacts = artifacts,
-            WaitingHuman = waitingHuman
+            WaitingHuman = waitingHuman,
+            ErrorCode = waitingHuman ? workflowErrorCode : null,
+            Issues = waitingHuman ? workflowIssues : Array.Empty<PrerequisiteIssue>(),
+            InteractionMessage = waitingHuman ? (workflowInteractionMessage ?? PrerequisiteInteractionFormatter.Format(workflowIssues, waitingMessage)) : null
         };
     }
 
-    private async Task<(bool ok, string waitingMessage)> EnsurePrerequisitesAsync(
+    private static IReadOnlyList<PrerequisiteIssue> MapCapabilityDiagnostics(IReadOnlyList<PrerequisiteDiagnostic> diagnostics, string? skillId)
+    {
+        var list = new List<PrerequisiteIssue>();
+        foreach (var d in diagnostics)
+        {
+            var hint = string.Equals(d.CapabilityId, CapabilityIds.EmailRead, StringComparison.OrdinalIgnoreCase)
+                ? "请完成邮箱账号配置：email.default_account_id、email.accounts.{账号id} 下的 host、port、username、authProfile，以及密码（email.accounts.{id}.password 或 email.auth_profiles.{profile}.password），然后重新运行工作流。"
+                : $"需要能力「{d.CapabilityId}」。请满足该能力所需的环境或配置后重试。";
+
+            list.Add(new PrerequisiteIssue
+            {
+                Kind = "capability",
+                Key = d.CapabilityId,
+                Code = d.Code,
+                Message = d.Message,
+                InteractionHint = hint
+            });
+        }
+
+        return list;
+    }
+
+    private async Task<(bool ok, string waitingMessage, IReadOnlyList<PrerequisiteIssue> issues)> EnsurePrerequisitesAsync(
         SkillDefinition? definition,
         IReadOnlyDictionary<string, object?> variables,
         TaskExecutionContext context,
         CancellationToken cancellationToken)
     {
         var waitingMessage = string.Empty;
+        var none = Array.Empty<PrerequisiteIssue>();
 
         var prereq = definition?.Prerequisites;
         var requiredResources = prereq?.RequiredResources ?? Array.Empty<SkillRequiredResource>();
@@ -231,7 +352,7 @@ public class WorkflowEngine : Core.IWorkflowEngine
         var envVars = definition?.Env ?? Array.Empty<string>();
 
         var needsCheck = requiredResources.Count > 0 || requiredConfig.Count > 0 || requiredAuth.Count > 0 || envVars.Count > 0;
-        if (!needsCheck) return (true, string.Empty);
+        if (!needsCheck) return (true, string.Empty, none);
 
         var isInteractive = _options.Value.IsInteractive;
         var resourceValues = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
@@ -241,7 +362,16 @@ public class WorkflowEngine : Core.IWorkflowEngine
             if (!string.Equals(rr.Type, "email_account", StringComparison.OrdinalIgnoreCase))
             {
                 waitingMessage = $"未实现的 prerequisites requiredResources.type：{rr.Type}（skill={definition?.Id}）。";
-                return (false, waitingMessage);
+                return (false, waitingMessage, new[]
+                {
+                    new PrerequisiteIssue
+                    {
+                        Kind = "resource",
+                        Code = TigerClawErrorCodes.UnsupportedResource,
+                        Message = waitingMessage,
+                        InteractionHint = "该 skill 声明了尚未支持的资源类型，需要扩展运行时。"
+                    }
+                });
             }
 
             var accountId = variables.TryGetValue(rr.Key, out var v) ? v?.ToString() : null;
@@ -253,7 +383,17 @@ public class WorkflowEngine : Core.IWorkflowEngine
                 if (!isInteractive)
                 {
                     waitingMessage = $"未配置：{rr.Key}（邮箱账号 id）。请先设置 preferences：email.default_account_id（或在任务变量中提供 {rr.Key}）。";
-                    return (false, waitingMessage);
+                    return (false, waitingMessage, new[]
+                    {
+                        new PrerequisiteIssue
+                        {
+                            Kind = "resource",
+                            Key = "email.default_account_id",
+                            Code = "missing_email_account_id",
+                            Message = waitingMessage,
+                            InteractionHint = $"请设置 preference「email.default_account_id」，或在任务变量中提供「{rr.Key}」，保存后重新运行工作流。"
+                        }
+                    });
                 }
 
                 accountId = await PromptForEmailAccountIdAsync(context.UserId, cancellationToken);
@@ -264,13 +404,22 @@ public class WorkflowEngine : Core.IWorkflowEngine
             if (string.IsNullOrWhiteSpace(accountId))
             {
                 waitingMessage = $"未获得邮箱账号 id（{rr.Key}），无法继续执行 skill={definition?.Id}。";
-                return (false, waitingMessage);
+                return (false, waitingMessage, new[]
+                {
+                    new PrerequisiteIssue
+                    {
+                        Kind = "resource",
+                        Key = "email.default_account_id",
+                        Code = "missing_email_account_id",
+                        Message = waitingMessage,
+                        InteractionHint = "请提供邮箱账号 id（例如 default），写入 email.default_account_id 后重试。"
+                    }
+                });
             }
 
             resourceValues[rr.Key] = accountId;
         }
 
-        // Collect missing config/auth/env keys.
         var missingPreferenceKeys = new List<string>();
         var missingEnvVars = new List<string>();
 
@@ -309,7 +458,7 @@ public class WorkflowEngine : Core.IWorkflowEngine
         }
 
         if (missingPreferenceKeys.Count == 0 && missingEnvVars.Count == 0)
-            return (true, string.Empty);
+            return (true, string.Empty, none);
 
         if (!isInteractive)
         {
@@ -320,10 +469,16 @@ public class WorkflowEngine : Core.IWorkflowEngine
                 parts.Add("缺少 env: " + string.Join(", ", missingEnvVars.Distinct().Take(20)));
 
             waitingMessage = $"未满足 skill prerequisites：{definition?.Id ?? "(unknown)"}。请补齐并重试。{(parts.Count > 0 ? " " + string.Join("；", parts) : "")}";
-            return (false, waitingMessage);
+            var issues = BuildIssuesForMissingPreferences(missingPreferenceKeys);
+            if (missingEnvVars.Count > 0)
+            {
+                var merged = issues.Concat(BuildIssuesForMissingEnv(missingEnvVars)).ToList();
+                return (false, waitingMessage, merged);
+            }
+
+            return (false, waitingMessage, issues);
         }
 
-        // Interactive prompt: acquire missing preference keys / env vars.
         foreach (var key in missingPreferenceKeys.Distinct())
         {
             if (string.IsNullOrWhiteSpace(key)) continue;
@@ -343,21 +498,30 @@ public class WorkflowEngine : Core.IWorkflowEngine
                 Environment.SetEnvironmentVariable(env, val.Trim());
         }
 
-        // Re-check after prompting.
         foreach (var template in requiredConfig.Concat(requiredAuth).Distinct())
         {
             var resolved = ResolveTemplate(template, resourceValues);
             if (resolved == null)
             {
                 waitingMessage = $"prerequisites 模板解析失败：{template}";
-                return (false, waitingMessage);
+                return (false, waitingMessage, new[]
+                {
+                    new PrerequisiteIssue
+                    {
+                        Kind = "preference",
+                        Key = template,
+                        Code = "template_unresolved",
+                        Message = waitingMessage,
+                        InteractionHint = waitingMessage
+                    }
+                });
             }
 
             var value = await _memory.Preferences.GetAsync(resolved, context.UserId, cancellationToken);
             if (string.IsNullOrWhiteSpace(value))
             {
                 waitingMessage = $"仍缺少 prerequisites preference：{resolved}";
-                return (false, waitingMessage);
+                return (false, waitingMessage, BuildIssuesForMissingPreferences(new[] { resolved }));
             }
         }
 
@@ -366,11 +530,60 @@ public class WorkflowEngine : Core.IWorkflowEngine
             if (string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable(env)))
             {
                 waitingMessage = $"仍缺少 prerequisites env：{env}";
-                return (false, waitingMessage);
+                return (false, waitingMessage, BuildIssuesForMissingEnv(new[] { env }));
             }
         }
 
-        return (true, string.Empty);
+        return (true, string.Empty, none);
+    }
+
+    private static IReadOnlyList<PrerequisiteIssue> BuildIssuesForMissingPreferences(IEnumerable<string> keys)
+    {
+        return keys
+            .Distinct()
+            .Where(k => !string.IsNullOrWhiteSpace(k))
+            .Select(k => k.Trim())
+            .Select(k => new PrerequisiteIssue
+            {
+                Kind = "preference",
+                Key = k,
+                Code = "missing_preference",
+                Message = $"缺少偏好项：{k}",
+                InteractionHint = HintForPreferenceKey(k)
+            })
+            .ToArray();
+    }
+
+    private static IReadOnlyList<PrerequisiteIssue> BuildIssuesForMissingEnv(IEnumerable<string> envs)
+    {
+        return envs
+            .Distinct()
+            .Where(e => !string.IsNullOrWhiteSpace(e))
+            .Select(e => e.Trim())
+            .Select(e => new PrerequisiteIssue
+            {
+                Kind = "env",
+                Key = e,
+                Code = "missing_env",
+                Message = $"缺少环境变量：{e}",
+                InteractionHint = $"请设置环境变量「{e}」后重新运行工作流。"
+            })
+            .ToArray();
+    }
+
+    private static string HintForPreferenceKey(string key)
+    {
+        if (key.Contains("email.accounts.", StringComparison.OrdinalIgnoreCase) && key.EndsWith(".host", StringComparison.OrdinalIgnoreCase))
+            return "请填写真实可解析的 IMAP 主机名（如 imap.gmail.com），不要使用示例占位域名；写入后重新运行工作流。";
+        if (key.Contains("email.accounts.", StringComparison.OrdinalIgnoreCase) && key.EndsWith(".password", StringComparison.OrdinalIgnoreCase))
+            return "请填写该邮箱账号的 IMAP 密码或应用专用密码；也可改用 email.auth_profiles.{profile}.password。";
+        if (key.Contains("email.accounts.", StringComparison.OrdinalIgnoreCase) && key.EndsWith(".username", StringComparison.OrdinalIgnoreCase))
+            return "请填写完整的邮箱登录用户名（通常为邮箱地址）。";
+        if (key.Contains("email.accounts.", StringComparison.OrdinalIgnoreCase) && key.EndsWith(".port", StringComparison.OrdinalIgnoreCase))
+            return "请填写 IMAP 端口（常见为 993 SSL 或 143 STARTTLS）。";
+        if (key.Contains("email.accounts.", StringComparison.OrdinalIgnoreCase) && key.EndsWith(".authProfile", StringComparison.OrdinalIgnoreCase))
+            return "请填写 authProfile 名称（与 email.auth_profiles.* 中的配置对应）。";
+        return $"请通过 POST /memory/preferences 或 CLI 写入 preference「{key}」，然后重新运行同一工作流。";
     }
 
     private async Task<string?> PromptForEmailAccountIdAsync(string userId, CancellationToken cancellationToken)

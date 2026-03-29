@@ -11,6 +11,26 @@ using TigerClaw.Workflows;
 
 namespace TigerClaw.Integration.Tests;
 
+file static class EmailDryRunScope
+{
+    public static IDisposable Enter()
+    {
+        var prev = Environment.GetEnvironmentVariable(EmailFetchUnreadSkill.DryRunEnvVar);
+        Environment.SetEnvironmentVariable(EmailFetchUnreadSkill.DryRunEnvVar, "true");
+        return new Disposer(() =>
+        {
+            Environment.SetEnvironmentVariable(EmailFetchUnreadSkill.DryRunEnvVar, prev);
+        });
+    }
+
+    sealed class Disposer : IDisposable
+    {
+        private readonly Action _onDispose;
+        public Disposer(Action onDispose) => _onDispose = onDispose;
+        public void Dispose() => _onDispose();
+    }
+}
+
 public class ApiHealthTests
 {
     private static IServiceProvider CreateProvider()
@@ -61,11 +81,12 @@ public class ApiHealthTests
     [Fact]
     public async Task RunWorkflow_DailyMailDigest_Succeeds()
     {
+        using var _dry = EmailDryRunScope.Enter();
         var sp = CreateProvider();
         var init = sp.GetRequiredService<TigerClaw.Infrastructure.Database.DatabaseInitializer>();
         await init.InitializeAsync();
 
-        // Satisfy prerequisites for skill `email.fetch_unread`.
+        // Satisfy prerequisites + email.read (password on account or auth profile).
         var prefs = sp.GetRequiredService<Core.IPreferenceService>();
         var accountId = "acc1";
         var userId = "local-user";
@@ -74,6 +95,7 @@ public class ApiHealthTests
         await prefs.UpsertAsync($"email.accounts.{accountId}.port", "993", userId);
         await prefs.UpsertAsync($"email.accounts.{accountId}.username", "user@example.com", userId);
         await prefs.UpsertAsync($"email.accounts.{accountId}.authProfile", "default", userId);
+        await prefs.UpsertAsync($"email.accounts.{accountId}.password", "not-used-under-dry-run", userId);
 
         var facade = sp.GetRequiredService<IRuntimeFacade>();
         var resp = await facade.RunWorkflowAsync("daily_mail_digest", new Dictionary<string, object?>(), userId);
@@ -92,7 +114,16 @@ public class ApiHealthTests
         var resp = await facade.RunWorkflowAsync("daily_mail_digest", new Dictionary<string, object?>(), userId);
 
         Assert.False(resp.Success);
+        Assert.True(resp.WaitingHuman);
+        Assert.True(resp.RequiresUserInput);
+        Assert.Equal(TaskOutcomes.NeedsUserInput, resp.Outcome);
+        Assert.NotNull(resp.RemediationHint);
+        Assert.NotEmpty(resp.SuggestedPreferenceKeys);
+        Assert.Equal(TigerClawErrorCodes.PrerequisiteMissing, resp.ErrorCode);
+        Assert.NotEmpty(resp.Issues);
+        Assert.NotNull(resp.InteractionMessage);
         Assert.NotNull(resp.Message);
         Assert.Contains(resp.Steps, s => s.Status == "waiting_human");
+        Assert.All(resp.Issues, i => Assert.False(string.IsNullOrWhiteSpace(i.Kind)));
     }
 }

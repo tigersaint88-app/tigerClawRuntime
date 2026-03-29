@@ -1,4 +1,4 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
   <ItemGroup>
     <ProjectReference Include="..\TigerClaw.Runtime\TigerClaw.Runtime.csproj" />
@@ -20,6 +20,29 @@
     <TargetFramework>net8.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
+    <!-- NuGet: global tool (dotnet tool install -g TigerClaw.Cli) -->
+    <IsPackable>true</IsPackable>
+    <PackAsTool>true</PackAsTool>
+    <PackageId>TigerClaw.Cli</PackageId>
+    <ToolCommandName>tigerclaw</ToolCommandName>
+    <Title>TigerClaw CLI</Title>
+    <Description>Local-first agent runtime CLI: workflows, skills, memory (SQLite). Run from a directory that contains skills/ and workflows/, or set working directory to your TigerClaw workspace.</Description>
+    <PackageTags>tigerclaw;cli;agent;workflow;local-first</PackageTags>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <GeneratePackageOnBuild>false</GeneratePackageOnBuild>
   </PropertyGroup>
+
+  <ItemGroup>
+    <None Include="..\..\README.md" Pack="true" PackagePath="\" />
+  </ItemGroup>
+
+  <!-- Global tool pack should not ship Playwright browser payload (huge + NU5111); users run `pwsh playwright.ps1 install` from SDK layout or project build output. -->
+  <Target Name="TigerClawStripPlaywrightFromToolPublish" AfterTargets="ComputeFilesToPublish">
+    <ItemGroup>
+      <ResolvedFileToPublish Remove="@(ResolvedFileToPublish)" Condition="$([System.String]::Copy('%(ResolvedFileToPublish.RelativePath)').Contains('.playwright'))" />
+      <ResolvedFileToPublish Remove="@(ResolvedFileToPublish)" Condition="$([System.String]::Copy('%(ResolvedFileToPublish.RelativePath)').Contains('playwright.ps1'))" />
+      <ResolvedFileToPublish Remove="@(ResolvedFileToPublish)" Condition="$([System.String]::Copy('%(ResolvedFileToPublish.RelativePath)').Contains('playwright.cmd'))" />
+    </ItemGroup>
+  </Target>
 
 </Project>

@@ -378,13 +378,19 @@ public sealed class CliCommandRouter
 
     private static CliCommandResult TaskResponseToResult(TaskResponse resp)
     {
+        if (resp.WaitingHuman)
+        {
+            var text = resp.InteractionMessage ?? resp.FinalText ?? resp.Message ?? "请补齐配置或确认后重新运行。";
+            return CliCommandResult.Ok(text, data: resp);
+        }
+
         if (!resp.Success)
             return CliCommandResult.Fail(resp.Message ?? "Task failed", 2, data: resp);
 
-        var text = resp.FinalText ?? "Done.";
+        var okText = resp.FinalText ?? "Done.";
         if (resp.Artifacts.Count > 0)
-            text += Environment.NewLine + "Artifacts: " + string.Join(", ", resp.Artifacts);
+            okText += Environment.NewLine + "Artifacts: " + string.Join(", ", resp.Artifacts);
 
-        return CliCommandResult.Ok(text, data: resp);
+        return CliCommandResult.Ok(okText, data: resp);
     }
 }

@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>TigerClaw 邮件配置与摘要 — 演示</title>
+  <style>
+    :root { font-family: "Segoe UI", system-ui, sans-serif; --bg: #0f1419; --card: #1a2332; --text: #e7ecf3; --muted: #8b9bb4; --accent: #3d8bfd; --ok: #3ecf8e; --warn: #f0c14a; }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: var(--bg); color: var(--text); line-height: 1.5; }
+    main { max-width: 52rem; margin: 0 auto; padding: 1.5rem 1rem 3rem; }
+    h1 { font-size: 1.35rem; font-weight: 600; margin: 0 0 0.5rem; }
+    .sub { color: var(--muted); font-size: 0.9rem; margin-bottom: 1.5rem; }
+    section { background: var(--card); border-radius: 10px; padding: 1rem 1.25rem; margin-bottom: 1rem; border: 1px solid #2a3544; }
+    h2 { font-size: 1rem; margin: 0 0 0.75rem; color: #b8c5d6; }
+    label { display: block; font-size: 0.8rem; color: var(--muted); margin-top: 0.6rem; }
+    input, textarea, button, select { font: inherit; }
+    input, textarea, select { width: 100%; padding: 0.45rem 0.55rem; border-radius: 6px; border: 1px solid #3d4a5c; background: #121a24; color: var(--text); }
+    textarea { min-height: 10rem; font-family: ui-monospace, monospace; font-size: 0.8rem; }
+    .row { display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; }
+    @media (max-width: 640px) { .row { grid-template-columns: 1fr; } }
+    button { cursor: pointer; padding: 0.5rem 1rem; border-radius: 6px; border: none; background: var(--accent); color: #fff; font-weight: 500; margin: 0.35rem 0.35rem 0.35rem 0; }
+    button.secondary { background: #3d4a5c; }
+    button.warn { background: #6b4c00; }
+    .steps { display: flex; gap: 0.5rem; flex-wrap: wrap; margin-bottom: 1rem; }
+    .step { padding: 0.25rem 0.6rem; border-radius: 999px; font-size: 0.75rem; background: #243044; color: var(--muted); }
+    .step.on { background: #143d2a; color: var(--ok); }
+    .callout { font-size: 0.85rem; background: #1e2a1a; border-left: 3px solid var(--ok); padding: 0.6rem 0.75rem; margin-bottom: 1rem; border-radius: 0 6px 6px 0; }
+    .warnbox { background: #2a2210; border-left-color: var(--warn); }
+    code { background: #243044; padding: 0.1rem 0.35rem; border-radius: 4px; font-size: 0.85em; }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>邮件：从配置到「未读摘要」</h1>
+    <p class="sub">本页与当前 API 同源，可直接调用 <code>/memory/preferences</code> 与 <code>/workflows/…/run</code>。请先启动：<code>dotnet run --project src/TigerClaw.Api/TigerClaw.Api.csproj</code>，浏览器打开本页地址（见下方）。</p>
+
+    <div class="callout">
+      <strong>为什么会出现 imap.example.com？</strong> 运行时<strong>不会</strong>自动写这个值。它来自本地 SQLite（<code>data/tigerclaw.db</code>）里已保存的 preferences——例如跑过集成测试、或曾按文档填过示例。CLI 默认用户是 <code>local-user</code>，与下面「用户 Id」一致即可对齐。
+    </div>
+    <div class="callout warnbox">
+      <strong>演示用主机：</strong> 请勿长期使用 <code>imap.example.com</code>（无法解析）。请换成真实 IMAP，如 Gmail：<code>imap.gmail.com</code>，端口 <code>993</code>，并开启应用专用密码等。
+    </div>
+
+    <div class="steps">
+      <span class="step on" id="st1">1 查看当前配置</span>
+      <span class="step" id="st2">2 写入邮箱偏好</span>
+      <span class="step" id="st3">3 运行 workflow</span>
+    </div>
+
+    <section>
+      <h2>用户 Id（与 CLI / API 一致）</h2>
+      <label>userId</label>
+      <input id="userId" value="local-user" />
+      <p class="sub" style="margin:0.5rem 0 0">CLI <code>run</code> 固定为 <code>local-user</code>；API 默认常为 <code>api-user</code>。查询/写入须用同一 Id。</p>
+    </section>
+
+    <section>
+      <h2>① 读取当前 preferences（邮件相关）</h2>
+      <button type="button" id="btnLoad">刷新列表</button>
+      <label style="margin-top:0.75rem">返回（仅展示含 email 的项）</label>
+      <textarea id="prefsOut" readonly placeholder="点击「刷新列表」"></textarea>
+    </section>
+
+    <section>
+      <h2>② 写入最小邮件配置（IMAP）</h2>
+      <div class="row">
+        <div><label>账号 id（如 default）</label><input id="accountId" value="default" /></div>
+        <div><label>email.default_account_id（与账号 id 一致）</label><input id="defAcc" value="default" readonly /></div>
+      </div>
+      <label>IMAP 主机（勿用示例域名）</label>
+      <input id="host" placeholder="imap.gmail.com" />
+      <div class="row">
+        <div><label>端口</label><input id="port" value="993" /></div>
+        <div><label>用户名（通常邮箱地址）</label><input id="username" placeholder="you@gmail.com" /></div>
+      </div>
+      <div class="row">
+        <div><label>authProfile</label><input id="authProfile" value="default" /></div>
+        <div><label>密码 / 应用专用密码</label><input id="password" type="password" autocomplete="off" placeholder="不落库演示可留空后仅看缺省提示" /></div>
+      </div>
+      <button type="button" id="btnSave">保存到 preferences（多条 POST）</button>
+      <p class="sub">键名规则：<code>email.default_account_id</code>、<code>email.accounts.{id}.host|port|username|authProfile|password</code>。</p>
+    </section>
+
+    <section>
+      <h2>③ 运行 <code>daily_mail_digest</code>（拉未读 → 摘要 → 写文件）</h2>
+      <p class="sub">未配置完整时会返回 <code>outcome: needs_user_input</code>；配置完整且主机可达时才会真正连 IMAP。也可设环境变量 <code>TIGERCLAW_EMAIL_DRY_RUN=true</code> 跳过连接（需在服务端配置）。</p>
+      <button type="button" id="btnWf">POST /workflows/daily_mail_digest/run</button>
+      <button type="button" class="secondary" id="btnNl">POST /tasks/run（自然语言：读取今天未读邮件并生成摘要）</button>
+    </section>
+
+    <section>
+      <h2>最后一次 API 响应（JSON）</h2>
+      <textarea id="lastJson" readonly placeholder="执行上方面按钮后显示"></textarea>
+    </section>
+  </main>
+  <script>
+    const $ = (id) => document.getElementById(id);
+    const uid = () => $("userId").value.trim() || "local-user";
+    const acc = () => $("accountId").value.trim() || "default";
+
+    function setStep(n) {
+      for (let i = 1; i <= 3; i++) $("st" + i).classList.toggle("on", i <= n);
+    }
+
+    async function showJson(res) {
+      const text = await res.text();
+      let pretty = text;
+      try { pretty = JSON.stringify(JSON.parse(text), null, 2); } catch (_) {}
+      $("lastJson").value = pretty;
+    }
+
+    $("btnLoad").onclick = async () => {
+      const r = await fetch("/memory/preferences?userId=" + encodeURIComponent(uid()));
+      const text = await r.text();
+      try { $("lastJson").value = JSON.stringify(JSON.parse(text), null, 2); } catch (_) { $("lastJson").value = text; }
+      const j = JSON.parse(text);
+      const emailRows = j.filter((p) => p.key && p.key.includes("email"));
+      $("prefsOut").value = emailRows.length
+        ? emailRows.map((p) => p.key + " = " + p.value).join("\n")
+        : "（无 email 相关 preference，或该 userId 下为空）";
+      setStep(1);
+    };
+
+    $("btnSave").onclick = async () => {
+      const u = uid();
+      const a = acc();
+      const pairs = [
+        ["email.default_account_id", $("defAcc").value || a],
+        ["email.accounts." + a + ".host", $("host").value.trim()],
+        ["email.accounts." + a + ".port", $("port").value.trim()],
+        ["email.accounts." + a + ".username", $("username").value.trim()],
+        ["email.accounts." + a + ".authProfile", $("authProfile").value.trim()],
+      ];
+      const pw = $("password").value;
+      if (pw) pairs.push(["email.accounts." + a + ".password", pw]);
+
+      for (const [key, value] of pairs) {
+        if (!value && key.indexOf("password") < 0) continue;
+        const r = await fetch("/memory/preferences", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ key, value: value || "", userId: u }),
+        });
+        if (!r.ok) { $("lastJson").value = "保存失败: " + key + " " + r.status; return; }
+      }
+      $("lastJson").value = JSON.stringify({ ok: true, savedKeys: pairs.map((p) => p[0]) }, null, 2);
+      setStep(2);
+      $("btnLoad").click();
+    };
+
+    $("btnWf").onclick = async () => {
+      const r = await fetch("/workflows/daily_mail_digest/run", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId: uid(), inputs: {} }),
+      });
+      await showJson(r);
+      setStep(3);
+    };
+
+    $("btnNl").onclick = async () => {
+      const r = await fetch("/tasks/run", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          userId: uid(),
+          inputText: "读取今天未读邮件并生成摘要",
+        }),
+      });
+      await showJson(r);
+      setStep(3);
+    };
+
+    $("accountId").addEventListener("input", () => { $("defAcc").value = acc(); });
+  </script>
+</body>
+</html>

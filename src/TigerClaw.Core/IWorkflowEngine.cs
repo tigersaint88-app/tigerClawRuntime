@@ -28,4 +28,7 @@ public record WorkflowExecutionResult
     public IReadOnlyList<StepExecutionResult> Steps { get; init; } = Array.Empty<StepExecutionResult>();
     public IReadOnlyList<string> Artifacts { get; init; } = Array.Empty<string>();
     public bool WaitingHuman { get; init; }
+    public string? ErrorCode { get; init; }
+    public IReadOnlyList<PrerequisiteIssue> Issues { get; init; } = Array.Empty<PrerequisiteIssue>();
+    public string? InteractionMessage { get; init; }
 }

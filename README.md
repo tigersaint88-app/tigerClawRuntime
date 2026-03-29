@@ -45,6 +45,28 @@ dotnet run --project src/TigerClaw.Cli/TigerClaw.Cli.csproj -- workflow list
 dotnet run --project src/TigerClaw.Cli/TigerClaw.Cli.csproj -- taobao search 空调
 ```
 
+### Email (IMAP)
+
+`email.fetch_unread` uses MailKit against your IMAP server (unread = **not seen**). Preferences (per user): `email.default_account_id`; `email.accounts.{id}.host`, `.port`, `.username`, `.authProfile`; password on `email.accounts.{id}.password` **or** `email.auth_profiles.{profile}.password`; optional `email.accounts.{id}.useSsl` (defaults to TLS except when port is 143). For automation without a real mailbox, set **`TIGERCLAW_EMAIL_DRY_RUN=true`** (skips connecting).
+
+### Install from NuGet (global tool)
+
+Package id: **`TigerClaw.Cli`**. Command on PATH: **`tigerclaw`**.
+
+```powershell
+dotnet tool install -g TigerClaw.Cli
+tigerclaw workflow list
+```
+
+Run commands from a directory that contains **`skills/`** and **`workflows/`** (or clone this repo and `cd` into the repo root). The tool does **not** bundle Playwright browsers; for browser skills, build the repo once and run `pwsh src/TigerClaw.Skills/bin/Release/net8.0/playwright.ps1 install`, or install browsers per [Playwright .NET](https://playwright.dev/dotnet/docs/intro) docs.
+
+**Publish to [nuget.org](https://www.nuget.org)** (one-time: create an account, create an API key with *Push* scope):
+
+```powershell
+.\scripts\pack-cli.ps1
+.\scripts\publish-nuget.ps1 -ApiKey YOUR_NUGET_API_KEY
+```
+
 ### API
 
 ```powershell
@@ -53,6 +75,8 @@ dotnet run --project src/TigerClaw.Api/TigerClaw.Api.csproj
 
 Default URLs: `http://localhost:5000` or `http://localhost:5263` (see `launchSettings`).
 
+**Why does CLI hit `imap.example.com`?** The CLI does **not** inject that host. It is read from SQLite (`data/tigerclaw.db`) preferences—often left over from tests or copy-paste. Use `GET /memory/preferences?userId=local-user` (CLI user) or clear/update those keys. **Static demo UI:** after `dotnet run` the API serves **`/email-demo.html`** (step-by-step: load prefs → save IMAP keys → run `daily_mail_digest`).
+
 | Method | Path | Description |
 |--------|------|-------------|
 | GET | `/health` | Health check |
@@ -60,8 +84,10 @@ Default URLs: `http://localhost:5000` or `http://localhost:5263` (see `launchSet
 | POST | `/workflows/{id}/run` | Run a workflow |
 | GET | `/skills` | List skills |
 | GET | `/workflows` | List workflows |
-| GET | `/memory/preferences` | List preferences |
+| GET | `/memory/preferences?userId=` | List preferences for that user (CLI uses `local-user`) |
 | POST | `/memory/preferences` | Upsert preference |
+
+`POST /workflows/{id}/run` and **`POST /tasks/run`** responses share the same shape. Branch on **`outcome`**: `completed` | `failed` | **`needs_user_input`**. When **`needs_user_input`** (aliases: **`waitingHuman`**, **`requiresUserInput`**), the client must show a form: use **`issues`**, **`suggestedPreferenceKeys`**, **`interactionMessage`**, and **`remediationHint`**, then **`POST /memory/preferences`** (same `userId`) and re-invoke the same workflow or natural-language request. Also returned: **`errorCode`** (e.g. `PREREQUISITE_MISSING`, `CAPABILITY_NOT_MET`, `EMAIL_IMAP_CONNECT_FAILED`).
 
 ### Capabilities & policy
 
@@ -125,6 +151,12 @@ dotnet build
 
 失败或未启用时自动回退规则路由，不产生额外模型费用。
 
+### 邮件配置存哪里？为什么会出现 example.com？
+
+- **存储位置**：SQLite **`data/tigerclaw.db`** 表 **`preferences`**，键名如 **`email.default_account_id`**、`email.accounts.{账号id}.host` / `port` / `username` / `authProfile` / `password` 等（与 CLI `memory preference set`、API `POST /memory/preferences` 一致）。
+- **不是 CLI 自动写的**：`dotnet run ... -- run "读取今天未读邮件…"` 只把 **用户 Id 固定为 `local-user`** 并路由到 workflow **`daily_mail_digest`**，不会填入 `imap.example.com`。若出现该主机，多半是**之前集成测试、文档示例或手动 `memory preference set`** 写入的同一数据库。
+- **演示界面**：启动 API 后浏览器打开 **`http://localhost:5263/email-demo.html`**（见 `src/TigerClaw.Api/wwwroot/`），可按「查看 → 配置 → 运行 workflow」走通全流程。
+
 ### 命令行（CLI）
 
 ```powershell
@@ -136,6 +168,28 @@ dotnet run --project src/TigerClaw.Cli/TigerClaw.Cli.csproj -- workflow run dail
 dotnet run --project src/TigerClaw.Cli/TigerClaw.Cli.csproj -- skills list
 dotnet run --project src/TigerClaw.Cli/TigerClaw.Cli.csproj -- workflow list
 dotnet run --project src/TigerClaw.Cli/TigerClaw.Cli.csproj -- taobao search 空调
+```
+
+### 邮件（IMAP）
+
+`email.fetch_unread` 使用 MailKit 连接 IMAP，未读条件为 **NOT SEEN**。用户级 preferences：`email.default_account_id`；`email.accounts.{id}` 下的 `host`、`port`、`username`、`authProfile`；密码写在 `email.accounts.{id}.password` **或** `email.auth_profiles.{profile}.password`；可选 `email.accounts.{id}.useSsl`（默认启用 TLS，端口 143 除外）。自动化/测试可设 **`TIGERCLAW_EMAIL_DRY_RUN=true`** 跳过真实连接。
+
+### 从 NuGet 安装（全局工具）
+
+包 id：**`TigerClaw.Cli`**。安装后命令行：**`tigerclaw`**。
+
+```powershell
+dotnet tool install -g TigerClaw.Cli
+tigerclaw workflow list
+```
+
+请在包含 **`skills/`** 与 **`workflows/`** 的目录下执行（例如本仓库根目录）。工具包**不含** Playwright 浏览器；若使用浏览器类 skill，可先在本仓库执行 `dotnet build` 后运行 `pwsh src/TigerClaw.Skills/bin/Release/net8.0/playwright.ps1 install`，或按 [Playwright .NET 文档](https://playwright.dev/dotnet/docs/intro) 安装。
+
+**发布到 [nuget.org](https://www.nuget.org)**（需注册账号并创建具有 *Push* 权限的 API Key）：
+
+```powershell
+.\scripts\pack-cli.ps1
+.\scripts\publish-nuget.ps1 -ApiKey 你的_NUGET_API_KEY
 ```
 
 ### 启动 API
@@ -153,8 +207,10 @@ dotnet run --project src/TigerClaw.Api/TigerClaw.Api.csproj
 | POST | `/workflows/{id}/run` | 运行 workflow |
 | GET | `/skills` | 列出 skills |
 | GET | `/workflows` | 列出 workflows |
-| GET | `/memory/preferences` | 获取 preferences |
+| GET | `/memory/preferences?userId=` | 按用户获取 preferences（CLI 为 `local-user`） |
 | POST | `/memory/preferences` | 保存 preference |
+
+**`POST /workflows/{id}/run`** 与 **`POST /tasks/run`** 返回结构一致。请以前端分支字段 **`outcome`** 为准：`completed` | `failed` | **`needs_user_input`**。为 **`needs_user_input`** 时（**`waitingHuman` / `requiresUserInput`** 同为 true），必须据 **`issues`**、**`suggestedPreferenceKeys`**、**`interactionMessage`**、**`remediationHint`** 展示表单，**`POST /memory/preferences`**（同一 `userId`）后再**重试同一请求**。另有 **`errorCode`** 等字段。
 
 ### 能力与策略
 

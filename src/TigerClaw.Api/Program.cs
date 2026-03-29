@@ -36,6 +36,8 @@ var app = builder.Build();
 app.UseSwagger();
 app.UseSwaggerUI();
 app.UseHttpsRedirection();
+app.UseDefaultFiles();
+app.UseStaticFiles();
 
 app.MapGet("/health", () => Results.Ok(new { status = "healthy", timestamp = DateTime.UtcNow }));
 
@@ -72,9 +74,9 @@ app.MapGet("/workflows", async (IRuntimeFacade facade) =>
     return Results.Json(workflows);
 });
 
-app.MapGet("/memory/preferences", async (IMemoryStore memory) =>
+app.MapGet("/memory/preferences", async (string? userId, IMemoryStore memory) =>
 {
-    var prefs = await memory.Preferences.ListAllAsync();
+    var prefs = await memory.Preferences.ListAllAsync(userId);
     return Results.Json(prefs);
 });
 
