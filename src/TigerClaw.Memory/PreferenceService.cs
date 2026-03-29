@@ -23,4 +23,7 @@ public class PreferenceService : Core.IPreferenceService
 
     public Task<IReadOnlyList<UserPreference>> ListAllAsync(string? userId = null, CancellationToken cancellationToken = default)
         => _repo.ListAllAsync(userId, cancellationToken);
+
+    public Task<int> DeleteKeyPrefixAsync(string keyPrefix, string? userId = null, CancellationToken cancellationToken = default)
+        => _repo.DeleteKeyPrefixAsync(keyPrefix, userId, cancellationToken);
 }

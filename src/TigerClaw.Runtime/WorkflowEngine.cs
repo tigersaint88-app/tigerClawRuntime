@@ -549,7 +549,8 @@ public class WorkflowEngine : Core.IWorkflowEngine
                 Key = k,
                 Code = "missing_preference",
                 Message = $"缺少偏好项：{k}",
-                InteractionHint = HintForPreferenceKey(k)
+                InteractionHint = HintForPreferenceKey(k),
+                MaskKeyInUi = PrerequisiteSensitive.ShouldMaskPreferenceKey(k)
             })
             .ToArray();
     }
@@ -566,7 +567,8 @@ public class WorkflowEngine : Core.IWorkflowEngine
                 Key = e,
                 Code = "missing_env",
                 Message = $"缺少环境变量：{e}",
-                InteractionHint = $"请设置环境变量「{e}」后重新运行工作流。"
+                InteractionHint = $"请设置环境变量「{e}」后重新运行工作流。",
+                MaskKeyInUi = PrerequisiteSensitive.ShouldMaskEnvName(e)
             })
             .ToArray();
     }

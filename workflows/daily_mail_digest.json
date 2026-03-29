@@ -16,7 +16,7 @@
       "name": "Summarize",
       "skillId": "text.summarize",
       "inputs": {
-        "text": "{{step.s1}}"
+        "text": "{{step.s1.digestText}}"
       },
       "nextStepId": "s3"
     },

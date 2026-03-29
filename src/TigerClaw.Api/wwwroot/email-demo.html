@@ -3,176 +3,755 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>TigerClaw 邮件配置与摘要 — 演示</title>
+  <title>TigerClaw — 邮件对话演示</title>
   <style>
-    :root { font-family: "Segoe UI", system-ui, sans-serif; --bg: #0f1419; --card: #1a2332; --text: #e7ecf3; --muted: #8b9bb4; --accent: #3d8bfd; --ok: #3ecf8e; --warn: #f0c14a; }
+    :root {
+      font-family: "Segoe UI", system-ui, sans-serif;
+      --bg: #0d1117; --panel: #161b22; --border: #30363d; --text: #e6edf3; --muted: #8b949e;
+      --tc: #58a6ff; --user: #238636; --bot: #1f6feb; --warn: #d29922;
+    }
     * { box-sizing: border-box; }
-    body { margin: 0; background: var(--bg); color: var(--text); line-height: 1.5; }
-    main { max-width: 52rem; margin: 0 auto; padding: 1.5rem 1rem 3rem; }
-    h1 { font-size: 1.35rem; font-weight: 600; margin: 0 0 0.5rem; }
-    .sub { color: var(--muted); font-size: 0.9rem; margin-bottom: 1.5rem; }
-    section { background: var(--card); border-radius: 10px; padding: 1rem 1.25rem; margin-bottom: 1rem; border: 1px solid #2a3544; }
-    h2 { font-size: 1rem; margin: 0 0 0.75rem; color: #b8c5d6; }
-    label { display: block; font-size: 0.8rem; color: var(--muted); margin-top: 0.6rem; }
-    input, textarea, button, select { font: inherit; }
-    input, textarea, select { width: 100%; padding: 0.45rem 0.55rem; border-radius: 6px; border: 1px solid #3d4a5c; background: #121a24; color: var(--text); }
-    textarea { min-height: 10rem; font-family: ui-monospace, monospace; font-size: 0.8rem; }
-    .row { display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; }
-    @media (max-width: 640px) { .row { grid-template-columns: 1fr; } }
-    button { cursor: pointer; padding: 0.5rem 1rem; border-radius: 6px; border: none; background: var(--accent); color: #fff; font-weight: 500; margin: 0.35rem 0.35rem 0.35rem 0; }
-    button.secondary { background: #3d4a5c; }
-    button.warn { background: #6b4c00; }
-    .steps { display: flex; gap: 0.5rem; flex-wrap: wrap; margin-bottom: 1rem; }
-    .step { padding: 0.25rem 0.6rem; border-radius: 999px; font-size: 0.75rem; background: #243044; color: var(--muted); }
-    .step.on { background: #143d2a; color: var(--ok); }
-    .callout { font-size: 0.85rem; background: #1e2a1a; border-left: 3px solid var(--ok); padding: 0.6rem 0.75rem; margin-bottom: 1rem; border-radius: 0 6px 6px 0; }
-    .warnbox { background: #2a2210; border-left-color: var(--warn); }
-    code { background: #243044; padding: 0.1rem 0.35rem; border-radius: 4px; font-size: 0.85em; }
+    body { margin: 0; background: var(--bg); color: var(--text); min-height: 100vh; display: flex; flex-direction: column; }
+    header {
+      display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem;
+      padding: 0.75rem 1rem; border-bottom: 1px solid var(--border); background: var(--panel);
+    }
+    header h1 { font-size: 1.1rem; margin: 0; font-weight: 600; }
+    header .brand { display: flex; align-items: center; gap: 0.5rem; }
+    header .brand span { color: var(--tc); font-weight: 700; }
+    .header-right { display: flex; flex-direction: column; align-items: flex-end; gap: 0.45rem; }
+    .lang-switch {
+      display: flex; align-items: center; gap: 0.25rem;
+      font-size: 0.75rem; color: var(--muted);
+    }
+    .lang-switch span { margin-right: 0.15rem; }
+    .lang-switch button.lang-btn {
+      padding: 0.22rem 0.55rem; font-size: 0.75rem; min-width: 2.6rem;
+      border-radius: 6px; border: 1px solid var(--border); background: #21262d; color: var(--text);
+    }
+    .lang-switch button.lang-btn.active {
+      background: var(--bot); border-color: #388bfd; color: #fff;
+    }
+    .toolbar { display: flex; flex-wrap: wrap; gap: 0.35rem; align-items: center; justify-content: flex-end; }
+    input.user-id { width: 9rem; padding: 0.35rem 0.5rem; border-radius: 6px; border: 1px solid var(--border); background: #0d1117; color: var(--text); font-size: 0.85rem; }
+    button {
+      cursor: pointer; padding: 0.4rem 0.75rem; border-radius: 6px; border: 1px solid var(--border);
+      background: #21262d; color: var(--text); font-size: 0.85rem;
+    }
+    button.primary { background: var(--bot); border-color: #388bfd; color: #fff; }
+    button.danger { border-color: #f85149; color: #f85149; }
+    #chat {
+      flex: 1; overflow-y: auto; padding: 1rem; max-width: 52rem; margin: 0 auto; width: 100%;
+      display: flex; flex-direction: column; gap: 0.75rem;
+    }
+    .msg { max-width: 92%; padding: 0.65rem 0.85rem; border-radius: 10px; line-height: 1.45; font-size: 0.92rem; white-space: pre-wrap; }
+    .msg.user { align-self: flex-end; background: #1f3d2d; border: 1px solid var(--user); }
+    .msg.bot { align-self: flex-start; background: var(--panel); border: 1px solid var(--border); }
+    .msg.bot .label { font-size: 0.7rem; color: var(--tc); margin-bottom: 0.35rem; font-weight: 600; }
+    .msg.system { align-self: center; font-size: 0.8rem; color: var(--muted); border: 1px dashed var(--border); background: transparent; }
+    .issues { margin-top: 0.5rem; padding-left: 1rem; }
+    .issues li { margin: 0.2rem 0; color: var(--muted); font-size: 0.85rem; }
+    #composer {
+      display: flex; align-items: stretch; gap: 0.5rem; padding: 0.75rem 1rem; border-top: 1px solid var(--border);
+      background: var(--panel); max-width: 52rem; margin: 0 auto; width: 100%;
+    }
+    .composer-line-wrap {
+      flex: 1; display: flex; align-items: stretch; gap: 0.35rem; min-width: 0;
+    }
+    .composer-line-wrap input {
+      flex: 1; min-width: 0; padding: 0.55rem 0.75rem; border-radius: 8px; border: 1px solid var(--border);
+      background: #0d1117; color: var(--text); font-size: 0.95rem;
+    }
+    button.icon-eye {
+      flex-shrink: 0; padding: 0.35rem 0.55rem; border-radius: 8px; border: 1px solid var(--border);
+      background: #21262d; color: var(--text); font-size: 1rem; line-height: 1; cursor: pointer;
+    }
+    button.icon-eye:hover { background: #30363d; }
+    .issue-key-row { display: inline-flex; align-items: center; gap: 0.35rem; vertical-align: middle; }
+    code.key-mask { font-family: ui-monospace, monospace; font-size: 0.8em; word-break: break-all; }
+    #results {
+      display: none; margin: 0 auto 1rem; max-width: 52rem; width: 100%; padding: 0 1rem;
+    }
+    #results.show { display: block; }
+    #results .panel {
+      border: 1px solid var(--border); border-radius: 10px; background: var(--panel);
+      max-height: min(70vh, 720px); overflow-y: auto; padding: 0.75rem 1rem; font-size: 0.88rem;
+    }
+    #results h3 { margin: 0 0 0.5rem; font-size: 0.95rem; color: var(--tc); }
+    .email-item { border-bottom: 1px solid var(--border); padding: 0.65rem 0; }
+    .email-item:last-child { border-bottom: none; }
+    .email-item details { margin: 0.4rem 0; border: 1px solid var(--border); border-radius: 8px; padding: 0.35rem 0.55rem; background: #0d1117; }
+    .email-item summary { cursor: pointer; color: var(--tc); font-size: 0.82rem; font-weight: 600; user-select: none; }
+    .email-plain {
+      margin: 0.35rem 0 0; white-space: pre-wrap; word-break: break-word; font-size: 0.82rem;
+      line-height: 1.4; max-height: 280px; overflow-y: auto; color: var(--text);
+    }
+    .email-html-frame {
+      display: block; width: 100%; min-height: 200px; max-height: 360px; border: 0; margin-top: 0.35rem;
+      border-radius: 6px; background: #fff; color: #111;
+    }
+    .att-list { margin: 0.35rem 0 0; padding-left: 1.15rem; font-size: 0.82rem; color: var(--muted); }
+    .att-list li { margin: 0.2rem 0; }
+    code { background: #21262d; padding: 0.1rem 0.35rem; border-radius: 4px; font-size: 0.85em; }
   </style>
 </head>
 <body>
-  <main>
-    <h1>邮件：从配置到「未读摘要」</h1>
-    <p class="sub">本页与当前 API 同源，可直接调用 <code>/memory/preferences</code> 与 <code>/workflows/…/run</code>。请先启动：<code>dotnet run --project src/TigerClaw.Api/TigerClaw.Api.csproj</code>，浏览器打开本页地址（见下方）。</p>
-
-    <div class="callout">
-      <strong>为什么会出现 imap.example.com？</strong> 运行时<strong>不会</strong>自动写这个值。它来自本地 SQLite（<code>data/tigerclaw.db</code>）里已保存的 preferences——例如跑过集成测试、或曾按文档填过示例。CLI 默认用户是 <code>local-user</code>，与下面「用户 Id」一致即可对齐。
+  <header>
+    <div class="brand">
+      <h1><span>TigerClaw</span> <span id="i18nHeaderSub"></span></h1>
     </div>
-    <div class="callout warnbox">
-      <strong>演示用主机：</strong> 请勿长期使用 <code>imap.example.com</code>（无法解析）。请换成真实 IMAP，如 Gmail：<code>imap.gmail.com</code>，端口 <code>993</code>，并开启应用专用密码等。
+    <div class="header-right">
+      <div class="lang-switch" role="group" aria-label="Language">
+        <span id="i18nLangLabel"></span>
+        <button type="button" class="lang-btn" id="btnLangZh" data-lang="zh">中文</button>
+        <button type="button" class="lang-btn" id="btnLangEn" data-lang="en">English</button>
+      </div>
+      <div class="toolbar">
+        <label id="i18nUserIdLabel" style="font-size:0.8rem;color:var(--muted)">userId</label>
+        <input class="user-id" id="userId" value="local-user" />
+        <button type="button" class="danger" id="btnClear"></button>
+        <button type="button" class="primary" id="btnStart"></button>
+      </div>
     </div>
+  </header>
 
-    <div class="steps">
-      <span class="step on" id="st1">1 查看当前配置</span>
-      <span class="step" id="st2">2 写入邮箱偏好</span>
-      <span class="step" id="st3">3 运行 workflow</span>
+  <div id="chat" aria-live="polite"></div>
+
+  <div id="results">
+    <h3 id="i18nResultsTitle"></h3>
+    <div class="panel" id="resultsBody"></div>
+  </div>
+
+  <form id="composer">
+    <div class="composer-line-wrap">
+      <input type="text" id="line" autocomplete="off" />
+      <button type="button" class="icon-eye" id="btnRevealLine" hidden aria-pressed="false"></button>
     </div>
+    <button type="submit" class="primary" id="btnSend"></button>
+  </form>
 
-    <section>
-      <h2>用户 Id（与 CLI / API 一致）</h2>
-      <label>userId</label>
-      <input id="userId" value="local-user" />
-      <p class="sub" style="margin:0.5rem 0 0">CLI <code>run</code> 固定为 <code>local-user</code>；API 默认常为 <code>api-user</code>。查询/写入须用同一 Id。</p>
-    </section>
-
-    <section>
-      <h2>① 读取当前 preferences（邮件相关）</h2>
-      <button type="button" id="btnLoad">刷新列表</button>
-      <label style="margin-top:0.75rem">返回（仅展示含 email 的项）</label>
-      <textarea id="prefsOut" readonly placeholder="点击「刷新列表」"></textarea>
-    </section>
-
-    <section>
-      <h2>② 写入最小邮件配置（IMAP）</h2>
-      <div class="row">
-        <div><label>账号 id（如 default）</label><input id="accountId" value="default" /></div>
-        <div><label>email.default_account_id（与账号 id 一致）</label><input id="defAcc" value="default" readonly /></div>
-      </div>
-      <label>IMAP 主机（勿用示例域名）</label>
-      <input id="host" placeholder="imap.gmail.com" />
-      <div class="row">
-        <div><label>端口</label><input id="port" value="993" /></div>
-        <div><label>用户名（通常邮箱地址）</label><input id="username" placeholder="you@gmail.com" /></div>
-      </div>
-      <div class="row">
-        <div><label>authProfile</label><input id="authProfile" value="default" /></div>
-        <div><label>密码 / 应用专用密码</label><input id="password" type="password" autocomplete="off" placeholder="不落库演示可留空后仅看缺省提示" /></div>
-      </div>
-      <button type="button" id="btnSave">保存到 preferences（多条 POST）</button>
-      <p class="sub">键名规则：<code>email.default_account_id</code>、<code>email.accounts.{id}.host|port|username|authProfile|password</code>。</p>
-    </section>
-
-    <section>
-      <h2>③ 运行 <code>daily_mail_digest</code>（拉未读 → 摘要 → 写文件）</h2>
-      <p class="sub">未配置完整时会返回 <code>outcome: needs_user_input</code>；配置完整且主机可达时才会真正连 IMAP。也可设环境变量 <code>TIGERCLAW_EMAIL_DRY_RUN=true</code> 跳过连接（需在服务端配置）。</p>
-      <button type="button" id="btnWf">POST /workflows/daily_mail_digest/run</button>
-      <button type="button" class="secondary" id="btnNl">POST /tasks/run（自然语言：读取今天未读邮件并生成摘要）</button>
-    </section>
-
-    <section>
-      <h2>最后一次 API 响应（JSON）</h2>
-      <textarea id="lastJson" readonly placeholder="执行上方面按钮后显示"></textarea>
-    </section>
-  </main>
   <script>
     const $ = (id) => document.getElementById(id);
+    const chat = $("chat");
     const uid = () => $("userId").value.trim() || "local-user";
-    const acc = () => $("accountId").value.trim() || "default";
 
-    function setStep(n) {
-      for (let i = 1; i <= 3; i++) $("st" + i).classList.toggle("on", i <= n);
-    }
+    const LANG_KEY = "emailDemoLang";
 
-    async function showJson(res) {
-      const text = await res.text();
-      let pretty = text;
-      try { pretty = JSON.stringify(JSON.parse(text), null, 2); } catch (_) {}
-      $("lastJson").value = pretty;
-    }
-
-    $("btnLoad").onclick = async () => {
-      const r = await fetch("/memory/preferences?userId=" + encodeURIComponent(uid()));
-      const text = await r.text();
-      try { $("lastJson").value = JSON.stringify(JSON.parse(text), null, 2); } catch (_) { $("lastJson").value = text; }
-      const j = JSON.parse(text);
-      const emailRows = j.filter((p) => p.key && p.key.includes("email"));
-      $("prefsOut").value = emailRows.length
-        ? emailRows.map((p) => p.key + " = " + p.value).join("\n")
-        : "（无 email 相关 preference，或该 userId 下为空）";
-      setStep(1);
+    const I18N = {
+      zh: {
+        pageTitle: "TigerClaw — 邮件对话演示",
+        headerSub: "邮件助手",
+        langLabel: "语言",
+        userIdLabel: "userId",
+        userIdTitle: "与 CLI run 一致",
+        btnClear: "清除邮件配置",
+        btnClearTitle: "删除所有 email.* preferences",
+        btnStart: "读取未读并摘要",
+        resultsTitle: "执行结果（可滚动）",
+        linePlaceholder: "输入消息…（邮箱、密码、或补充说明）",
+        btnSend: "发送",
+        welcomeHtml:
+          "你好。我是 TigerClaw 邮件演示：会调用后端的 <code>daily_mail_digest</code> 工作流，按<strong>预设条件</strong>检查 SQLite 中的邮箱配置。\n\n流程：先运行检查 → 若缺配置，会逐项提示 → 输入邮箱后<strong>检索内置 IMAP 表</strong>（非实时联网）→ 再输入密码 → 再次执行 → 下方展示未读与摘要。\n\n可先点「清除邮件配置」从零开始。",
+        errSavePref: "保存失败 ",
+        clearedPrefs: "已清除邮件相关配置（删除 {n} 条）。",
+        providerLookup: "正在检索常见 IMAP 配置（内置域名表，非实时联网搜索）…",
+        runWorkflow: "正在检查预设条件并运行工作流 daily_mail_digest …",
+        emailsIntro: "<strong>未读邮件</strong>（纯文本 / HTML / 附件列表；附件仅元数据，不下载文件）",
+        noAtt: "无附件或非标准结构未识别。",
+        noHtmlBody: "（无 HTML 正文）",
+        summary: "摘要",
+        from: "发件人",
+        plainText: "纯文本",
+        htmlRender: "HTML 渲染（沙箱 iframe）",
+        attachments: "附件",
+        inline: "内嵌",
+        moreThan8: "仅展示前 8 封；完整数据见 API JSON。",
+        prereqBlock: "当前无法满足邮件读取的<strong>预设条件</strong>。",
+        pwFail: "仍无法继续：请检查密码/授权码，或点「清除邮件配置」后重试。",
+        askEmail:
+          "请在下框输入<strong>完整邮箱地址</strong>（如 jackliew@sina.com）。系统将<strong>查询内置 IMAP 表</strong>（非实时联网），再请你输入密码。",
+        askEmailRetry: "请先输入<strong>邮箱地址</strong>，或点击「清除邮件配置」后重新开始。",
+        doneOk: "已完成：未读拉取 → 摘要 → 写入 mail_digest.txt（若成功）。",
+        incomplete: "未完成：",
+        invalidEmail: "这不是有效的邮箱地址，请重试。",
+        domainMatched: "已匹配域名：<strong>{host}</strong> 端口 {port}（SSL: {ssl}）。\n{note}",
+        prefsWritten: "已写入 username / host / port / authProfile。正在再次检查…",
+        askPassword: "请输入邮箱<strong>密码或授权码</strong>（下一步将保存到 preferences）。",
+        unknownDomain: "内置表未收录该域名。请下一行输入：<strong>IMAP主机 端口</strong>，例如 <code>imap.sohu.com 993</code>。",
+        pwSaved: "密码已保存。正在尝试拉取未读并生成摘要…",
+        needHost: "请提供主机名。",
+        hostSaved: "已保存主机/端口。请输入<strong>完整邮箱地址</strong>（若尚未保存用户名）或直接输入<strong>密码</strong>。",
+        sayDigest: "请说「读取未读邮件并摘要」，或点击上方按钮。",
+        userStartsDigest: "读取未读邮件并生成摘要",
+        botLabel: "TigerClaw",
+        eyeRevealKey: "显示完整键名",
+        eyeHideKey: "隐藏键名",
+        eyeRevealPassword: "显示密码",
+        eyeHidePassword: "隐藏密码",
+      },
+      en: {
+        pageTitle: "TigerClaw — Mail demo",
+        headerSub: "Mail assistant",
+        langLabel: "Language",
+        userIdLabel: "userId",
+        userIdTitle: "Same as CLI default user",
+        btnClear: "Clear mail settings",
+        btnClearTitle: "Remove all email.* preferences",
+        btnStart: "Fetch unread & summarize",
+        resultsTitle: "Run output (scrollable)",
+        linePlaceholder: "Message… (email, password, or notes)",
+        btnSend: "Send",
+        welcomeHtml:
+          "Hello. This TigerClaw mail demo calls the backend <code>daily_mail_digest</code> workflow and checks mailbox settings in SQLite against <strong>prerequisites</strong>.\n\nFlow: run checks → if anything is missing, you’ll be prompted → enter your email to <strong>look up built-in IMAP settings</strong> (offline table, not live web) → enter password → run again → unread mail and summary appear below.\n\nYou can tap <strong>Clear mail settings</strong> to start from scratch.",
+        errSavePref: "Save failed ",
+        clearedPrefs: "Cleared mail-related preferences ({n} rows removed).",
+        providerLookup: "Looking up common IMAP settings (built-in domain table, not live search)…",
+        runWorkflow: "Checking prerequisites and running workflow daily_mail_digest…",
+        emailsIntro: "<strong>Unread mail</strong> (plain / HTML / attachments list; metadata only, files are not downloaded)",
+        noAtt: "No attachments detected or structure not recognized.",
+        noHtmlBody: "(No HTML body)",
+        summary: "Summary",
+        from: "From",
+        plainText: "Plain text",
+        htmlRender: "HTML (sandboxed iframe)",
+        attachments: "Attachments",
+        inline: "inline",
+        moreThan8: "Showing first 8 messages; full data is in the API JSON.",
+        prereqBlock: "Mail prerequisites are <strong>not satisfied</strong>.",
+        pwFail: "Still blocked: check password/app password, or tap Clear mail settings and try again.",
+        askEmail:
+          "Enter your <strong>full email address</strong> below (e.g. user@sina.com). The app will <strong>query the built-in IMAP table</strong> (offline), then ask for your password.",
+        askEmailRetry: "Enter your <strong>email address</strong> first, or tap Clear mail settings to restart.",
+        doneOk: "Done: fetch unread → summarize → write mail_digest.txt (if successful).",
+        incomplete: "Not completed: ",
+        invalidEmail: "That doesn’t look like a valid email address.",
+        domainMatched: "Matched domain: <strong>{host}</strong> port {port} (SSL: {ssl}).\n{note}",
+        prefsWritten: "Saved username / host / port / authProfile. Checking again…",
+        askPassword: "Enter your mailbox <strong>password or app password</strong> (it will be stored in preferences).",
+        unknownDomain:
+          "Domain not in the built-in table. On the next line enter: <strong>IMAP host port</strong>, e.g. <code>imap.sohu.com 993</code>.",
+        pwSaved: "Password saved. Fetching unread and generating summary…",
+        needHost: "Please provide a host name.",
+        hostSaved: "Host/port saved. Enter your <strong>full email</strong> (if username not set yet) or your <strong>password</strong>.",
+        sayDigest: 'Say “fetch unread and summarize” or use the button above.',
+        userStartsDigest: "Fetch unread mail and summarize",
+        botLabel: "TigerClaw",
+        eyeRevealKey: "Show full key",
+        eyeHideKey: "Hide key",
+        eyeRevealPassword: "Show password",
+        eyeHidePassword: "Hide password",
+      },
     };
 
-    $("btnSave").onclick = async () => {
-      const u = uid();
-      const a = acc();
-      const pairs = [
-        ["email.default_account_id", $("defAcc").value || a],
-        ["email.accounts." + a + ".host", $("host").value.trim()],
-        ["email.accounts." + a + ".port", $("port").value.trim()],
-        ["email.accounts." + a + ".username", $("username").value.trim()],
-        ["email.accounts." + a + ".authProfile", $("authProfile").value.trim()],
-      ];
-      const pw = $("password").value;
-      if (pw) pairs.push(["email.accounts." + a + ".password", pw]);
+    let lang = (function () {
+      try {
+        const s = localStorage.getItem(LANG_KEY);
+        if (s === "en" || s === "zh") return s;
+      } catch (e) {}
+      return "zh";
+    })();
 
-      for (const [key, value] of pairs) {
-        if (!value && key.indexOf("password") < 0) continue;
-        const r = await fetch("/memory/preferences", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ key, value: value || "", userId: u }),
+    function t(key) {
+      const pack = I18N[lang] || I18N.zh;
+      return pack[key] ?? I18N.zh[key] ?? key;
+    }
+
+    function tf(key, vars) {
+      let s = t(key);
+      if (vars) {
+        Object.keys(vars).forEach((k) => {
+          s = s.split("{" + k + "}").join(String(vars[k]));
         });
-        if (!r.ok) { $("lastJson").value = "保存失败: " + key + " " + r.status; return; }
       }
-      $("lastJson").value = JSON.stringify({ ok: true, savedKeys: pairs.map((p) => p[0]) }, null, 2);
-      setStep(2);
-      $("btnLoad").click();
+      return s;
+    }
+
+    function applyLang() {
+      document.documentElement.lang = lang === "zh" ? "zh-CN" : "en";
+      document.title = t("pageTitle");
+      $("i18nHeaderSub").textContent = t("headerSub");
+      $("i18nLangLabel").textContent = t("langLabel");
+      $("i18nUserIdLabel").textContent = t("userIdLabel");
+      $("userId").title = t("userIdTitle");
+      $("btnClear").textContent = t("btnClear");
+      $("btnClear").title = t("btnClearTitle");
+      $("btnStart").textContent = t("btnStart");
+      $("i18nResultsTitle").textContent = t("resultsTitle");
+      $("line").placeholder = t("linePlaceholder");
+      $("btnSend").textContent = t("btnSend");
+      updateComposerSecretMode();
+      $("btnLangZh").classList.toggle("active", lang === "zh");
+      $("btnLangEn").classList.toggle("active", lang === "en");
+      try {
+        localStorage.setItem(LANG_KEY, lang);
+      } catch (e) {}
+      if (state.lastWorkflowResponse != null) showResults(state.lastWorkflowResponse);
+    }
+
+    function setLang(next) {
+      if (next !== "zh" && next !== "en") return;
+      lang = next;
+      applyLang();
+    }
+
+    $("btnLangZh").onclick = () => setLang("zh");
+    $("btnLangEn").onclick = () => setLang("en");
+
+    const state = {
+      expect: null,
+      accountKey: "default",
+      lastIssues: [],
+      lastWorkflowResponse: null,
+      passwordFieldRevealed: false,
     };
 
-    $("btnWf").onclick = async () => {
+    function addMsg(kind, text, html) {
+      const d = document.createElement("div");
+      d.className = "msg " + kind;
+      if (kind === "bot") {
+        const lab = document.createElement("div");
+        lab.className = "label";
+        lab.textContent = t("botLabel");
+        d.appendChild(lab);
+      }
+      const body = document.createElement("div");
+      if (html) body.innerHTML = html;
+      else body.textContent = text;
+      d.appendChild(body);
+      chat.appendChild(d);
+      chat.scrollTop = chat.scrollHeight;
+    }
+
+    function addSystem(tstr) {
+      const d = document.createElement("div");
+      d.className = "msg system";
+      d.textContent = tstr;
+      chat.appendChild(d);
+      chat.scrollTop = chat.scrollHeight;
+    }
+
+    async function postPref(key, value) {
+      const r = await fetch("/memory/preferences", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ key, value, userId: uid() }),
+      });
+      if (!r.ok) throw new Error(t("errSavePref") + key);
+    }
+
+    async function clearEmail() {
+      const r = await fetch("/memory/preferences/clear-email", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId: uid() }),
+      });
+      const j = await r.json();
+      addSystem(tf("clearedPrefs", { n: j.deleted ?? "?" }));
+    }
+
+    function accountIdFromEmail(email) {
+      const local = email.split("@")[0].replace(/[^a-z0-9_-]/gi, "").slice(0, 32);
+      return local || "default";
+    }
+
+    async function providerHint(email) {
+      addSystem(t("providerLookup"));
+      const r = await fetch("/email/provider-hint", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ emailOrDomain: email }),
+      });
+      return r.json();
+    }
+
+    async function runWorkflow() {
+      addSystem(t("runWorkflow"));
       const r = await fetch("/workflows/daily_mail_digest/run", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ userId: uid(), inputs: {} }),
       });
-      await showJson(r);
-      setStep(3);
-    };
+      return r.json();
+    }
 
-    $("btnNl").onclick = async () => {
-      const r = await fetch("/tasks/run", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          userId: uid(),
-          inputText: "读取今天未读邮件并生成摘要",
-        }),
+    function keyToB64(s) {
+      try {
+        return btoa(unescape(encodeURIComponent(String(s))));
+      } catch (e) {
+        return "";
+      }
+    }
+
+    function keyFromB64(b64) {
+      try {
+        return decodeURIComponent(escape(atob(String(b64))));
+      } catch (e) {
+        return "";
+      }
+    }
+
+    function maskKeyStars(key) {
+      if (!key) return "";
+      const n = Math.min(Math.max(String(key).length * 2, 10), 56);
+      return "*".repeat(n);
+    }
+
+    function renderIssues(data) {
+      const list = (data.issues || []).map((i, idx) => {
+        const key = i.key || "";
+        const mask = i.maskKeyInUi === true || i.MaskKeyInUi === true;
+        let keyHtml;
+        if (mask && key) {
+          const b64 = keyToB64(key);
+          const id = "ik" + idx + "_" + String(Math.random()).slice(2, 8);
+          keyHtml =
+            '<span class="issue-key-row"><code class="key-mask" id="' +
+            id +
+            '" data-b64="' +
+            esc(b64) +
+            '" data-masked="1">' +
+            esc(maskKeyStars(key)) +
+            '</code><button type="button" class="icon-eye issue-eye" data-target="' +
+            id +
+            '" aria-pressed="false" aria-label="' +
+            esc(t("eyeRevealKey")) +
+            '">👁</button></span>';
+        } else {
+          keyHtml = key ? "<code>" + esc(key) + "</code>" : "";
+        }
+        return (
+          "<li><strong>" +
+          esc(i.kind) +
+          "</strong> " +
+          keyHtml +
+          " — " +
+          esc(i.interactionHint || i.message) +
+          "</li>"
+        );
       });
-      await showJson(r);
-      setStep(3);
+      return "<ul class='issues'>" + list.join("") + "</ul>";
+    }
+
+    function updateComposerSecretMode() {
+      const line = $("line");
+      const eye = $("btnRevealLine");
+      if (!line || !eye) return;
+      const secret = state.expect === "password";
+      eye.hidden = !secret;
+      if (!secret) {
+        state.passwordFieldRevealed = false;
+        line.type = "text";
+        eye.setAttribute("aria-pressed", "false");
+        eye.title = t("eyeRevealPassword");
+        return;
+      }
+      line.type = state.passwordFieldRevealed ? "text" : "password";
+      eye.setAttribute("aria-pressed", state.passwordFieldRevealed ? "true" : "false");
+      eye.title = state.passwordFieldRevealed ? t("eyeHidePassword") : t("eyeRevealPassword");
+    }
+
+    function esc(s) {
+      return String(s ?? "")
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;");
+    }
+
+    function formatBytes(n) {
+      if (n == null || n === 0) return "0 B";
+      const u = ["B", "KB", "MB", "GB"];
+      let i = 0;
+      let x = Number(n);
+      if (!Number.isFinite(x) || x < 0) return "?";
+      while (x >= 1024 && i < u.length - 1) {
+        x /= 1024;
+        i++;
+      }
+      return (i > 0 ? x.toFixed(1) : String(Math.round(x))) + " " + u[i];
+    }
+
+    function showResults(data) {
+      if (window._emailDemoBlobUrls) {
+        window._emailDemoBlobUrls.forEach((u) => URL.revokeObjectURL(u));
+      }
+      window._emailDemoBlobUrls = [];
+
+      const steps = data.steps || [];
+      const s1 = steps.find((s) => s.stepId === "s1");
+      const s2 = steps.find((s) => s.stepId === "s2");
+      const out1 = s1 && s1.output;
+      const out2 = s2 && s2.output;
+      let html = "";
+
+      if (out1 && out1.emails && out1.emails.length) {
+        html += "<p>" + t("emailsIntro") + "</p>";
+        out1.emails.slice(0, 8).forEach((e) => {
+          const att = e.attachments || [];
+          let attBlock =
+            "<ul class='att-list'>" +
+            att
+              .map(
+                (a) =>
+                  "<li><strong>" +
+                  esc(a.fileName) +
+                  "</strong> · <span>" +
+                  esc(a.mimeType) +
+                  "</span> · " +
+                  formatBytes(a.sizeBytes) +
+                  (a.isInline ? " · <em>" + esc(t("inline")) + "</em>" : "") +
+                  (a.contentId ? " · cid:" + esc(a.contentId) : "") +
+                  "</li>"
+              )
+              .join("") +
+            "</ul>";
+          if (!att.length)
+            attBlock =
+              "<p style='margin:0.35rem 0;color:var(--muted);font-size:0.82rem'>" + esc(t("noAtt")) + "</p>";
+
+          let iframeBlock;
+          if (e.htmlBody && String(e.htmlBody).length) {
+            const blob = new Blob([e.htmlBody], { type: "text/html;charset=utf-8" });
+            const url = URL.createObjectURL(blob);
+            window._emailDemoBlobUrls.push(url);
+            iframeBlock =
+              "<iframe class='email-html-frame' sandbox='' title='" +
+              esc(t("htmlRender")) +
+              "' src='" +
+              url.replace(/'/g, "%27") +
+              "'></iframe>";
+          } else {
+            iframeBlock = "<p style='color:var(--muted);font-size:0.82rem'>" + esc(t("noHtmlBody")) + "</p>";
+          }
+
+          const plain = e.textBody != null && e.textBody !== "" ? e.textBody : e.bodySnippet || "";
+          html +=
+            "<div class='email-item'>" +
+            "<div><strong>" +
+            esc(e.subject) +
+            "</strong></div>" +
+            "<div style='font-size:0.8rem;color:var(--muted);margin:0.2rem 0'>" +
+            esc(t("from")) +
+            " " +
+            esc(e.sender) +
+            " · " +
+            esc(e.date) +
+            "</div>" +
+            "<details open><summary>" +
+            esc(t("plainText")) +
+            "</summary><pre class='email-plain'>" +
+            esc(plain) +
+            "</pre></details>" +
+            "<details><summary>" +
+            esc(t("htmlRender")) +
+            "</summary>" +
+            iframeBlock +
+            "</details>" +
+            "<details><summary>" +
+            esc(t("attachments")) +
+            " (" +
+            att.length +
+            ")</summary>" +
+            attBlock +
+            "</details>" +
+            "</div>";
+        });
+        if (out1.emails.length > 8) {
+          html += "<p style='color:var(--muted);font-size:0.82rem'>" + esc(t("moreThan8")) + "</p>";
+        }
+      } else if (out1) {
+        html += "<pre>" + esc(JSON.stringify(out1, null, 2)) + "</pre>";
+      }
+
+      if (out2 !== undefined && out2 !== null) {
+        const sum = typeof out2 === "string" ? out2 : out2.summary || out2.text || JSON.stringify(out2);
+        html +=
+          "<p style='margin-top:0.75rem'><strong>" +
+          esc(t("summary")) +
+          "</strong></p><div>" +
+          esc(String(sum).slice(0, 4000)) +
+          "</div>";
+      }
+
+      if (!html) html = "<pre>" + esc(JSON.stringify(data, null, 2)) + "</pre>";
+
+      $("resultsBody").innerHTML = html;
+      $("results").classList.add("show");
+      $("results").scrollIntoView({ behavior: "smooth" });
+      state.lastWorkflowResponse = data;
+    }
+
+    async function handleWorkflowResponse(data) {
+      state.lastIssues = data.issues || [];
+
+      if (data.outcome === "needs_user_input" || data.waitingHuman) {
+        addMsg("bot", "", t("prereqBlock") + renderIssues(data));
+        if (data.interactionMessage) addMsg("bot", data.interactionMessage);
+
+        if (state.expect === "password") {
+          addMsg("bot", t("pwFail"));
+          return;
+        }
+        if (state.expect === "manual_host") return;
+
+        const askOnce = !state.expect;
+        state.expect = "email";
+        if (askOnce) {
+          addMsg("bot", "", t("askEmail"));
+        } else {
+          addMsg("bot", "", t("askEmailRetry"));
+        }
+        updateComposerSecretMode();
+        return;
+      }
+
+      if (data.success && (data.outcome === "completed" || (!data.waitingHuman && !data.outcome))) {
+        addMsg("bot", t("doneOk"));
+        showResults(data);
+        state.expect = null;
+        updateComposerSecretMode();
+        return;
+      }
+
+      addMsg("bot", t("incomplete") + (data.message || JSON.stringify(data)));
+    }
+
+    async function onUserEmail(email) {
+      const trimmed = email.trim();
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmed)) {
+        addMsg("bot", t("invalidEmail"));
+        return;
+      }
+
+      state.accountKey = accountIdFromEmail(trimmed);
+      const ph = await providerHint(trimmed);
+
+      if (ph.found && ph.hint) {
+        const h = ph.hint;
+        const matchedLine = tf("domainMatched", {
+          host: esc(h.imapHost),
+          port: String(h.port),
+          ssl: String(h.useSsl),
+          note: esc(h.note),
+        });
+        addMsg("bot", "", matchedLine.replace(/\n/g, "<br/>"));
+        await postPref("email.default_account_id", state.accountKey);
+        await postPref("email.accounts." + state.accountKey + ".username", trimmed);
+        await postPref("email.accounts." + state.accountKey + ".host", h.imapHost);
+        await postPref("email.accounts." + state.accountKey + ".port", String(h.port));
+        await postPref("email.accounts." + state.accountKey + ".authProfile", "default");
+        addSystem(t("prefsWritten"));
+        state.passwordFieldRevealed = false;
+        state.expect = "password";
+        updateComposerSecretMode();
+        addMsg("bot", "", t("askPassword"));
+        return;
+      }
+
+      await postPref("email.default_account_id", state.accountKey);
+      await postPref("email.accounts." + state.accountKey + ".username", trimmed);
+      addMsg("bot", "", t("unknownDomain"));
+      state.expect = "manual_host";
+    }
+
+    async function onUserPassword(pw) {
+      const k = "email.accounts." + state.accountKey + ".password";
+      await postPref(k, pw);
+      addSystem(t("pwSaved"));
+      state.expect = null;
+      updateComposerSecretMode();
+      const data = await runWorkflow();
+      await handleWorkflowResponse(data);
+    }
+
+    async function onSubmit(text) {
+      const line = text.trim();
+      if (!line) return;
+
+      addMsg("user", line);
+
+      if (state.expect === "email") {
+        await onUserEmail(line);
+        return;
+      }
+      if (state.expect === "password") {
+        await onUserPassword(line);
+        return;
+      }
+      if (state.expect === "manual_host") {
+        const parts = line.split(/\s+/);
+        const host = parts[0];
+        const port = parts[1] || "993";
+        if (!host) {
+          addMsg("bot", t("needHost"));
+          return;
+        }
+        await postPref("email.default_account_id", state.accountKey);
+        await postPref("email.accounts." + state.accountKey + ".host", host);
+        await postPref("email.accounts." + state.accountKey + ".port", port);
+        addMsg("bot", "", t("hostSaved"));
+        state.passwordFieldRevealed = false;
+        state.expect = "password";
+        updateComposerSecretMode();
+        return;
+      }
+
+      if (/未读|摘要|邮件|digest|imap|unread|summary|mail/i.test(line) || line.length > 8) {
+        const data = await runWorkflow();
+        await handleWorkflowResponse(data);
+      } else {
+        addMsg("bot", t("sayDigest"));
+      }
+    }
+
+    $("btnClear").onclick = async () => {
+      await clearEmail();
+      state.expect = null;
+      updateComposerSecretMode();
     };
 
-    $("accountId").addEventListener("input", () => { $("defAcc").value = acc(); });
+    $("btnStart").onclick = async () => {
+      addMsg("user", t("userStartsDigest"));
+      const data = await runWorkflow();
+      await handleWorkflowResponse(data);
+    };
+
+    $("composer").onsubmit = async (e) => {
+      e.preventDefault();
+      const line = $("line");
+      const v = line.value;
+      line.value = "";
+      await onSubmit(v);
+    };
+
+    $("btnRevealLine").onclick = () => {
+      if (state.expect !== "password") return;
+      state.passwordFieldRevealed = !state.passwordFieldRevealed;
+      updateComposerSecretMode();
+    };
+
+    chat.addEventListener("click", (ev) => {
+      const btn = ev.target.closest(".issue-eye");
+      if (!btn) return;
+      const id = btn.getAttribute("data-target");
+      const code = id ? document.getElementById(id) : null;
+      if (!code || !code.dataset.b64) return;
+      const full = keyFromB64(code.dataset.b64);
+      if (!full) return;
+      if (code.dataset.masked === "1") {
+        code.textContent = full;
+        code.dataset.masked = "0";
+        btn.setAttribute("aria-pressed", "true");
+        btn.setAttribute("aria-label", t("eyeHideKey"));
+      } else {
+        code.textContent = maskKeyStars(full);
+        code.dataset.masked = "1";
+        btn.setAttribute("aria-pressed", "false");
+        btn.setAttribute("aria-label", t("eyeRevealKey"));
+      }
+    });
+
+    applyLang();
+    addMsg("bot", "", t("welcomeHtml").replace(/\n/g, "<br/>"));
   </script>
 </body>
 </html>

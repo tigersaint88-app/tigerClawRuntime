@@ -74,8 +74,50 @@ public static class StepInputResolver
                         return prev.Output?.ToString() ?? "";
                 }
                 if (path.Length >= 2 && path[0] == "step" && stepResults != null && stepResults.TryGetValue(path[1], out var stepRes) && stepRes.Output != null)
+                {
+                    if (path.Length >= 3)
+                    {
+                        var subPath = string.Join('.', path.Skip(2));
+                        var extracted = TryExtractStepOutputPath(stepRes.Output, subPath);
+                        if (extracted != null) return extracted;
+                    }
+
                     return stepRes.Output is string st ? st : JsonSerializer.Serialize(stepRes.Output);
+                }
+
                 return m.Value;
             });
+    }
+
+    /// <summary>Navigate step output as JSON (e.g. <c>digestText</c>, <c>emails.0.subject</c>).</summary>
+    private static string? TryExtractStepOutputPath(object output, string dottedPath)
+    {
+        if (string.IsNullOrEmpty(dottedPath)) return null;
+        try
+        {
+            var element = JsonSerializer.SerializeToElement(output);
+            foreach (var segment in dottedPath.Split('.', StringSplitOptions.RemoveEmptyEntries))
+            {
+                if (element.ValueKind == JsonValueKind.Object && element.TryGetProperty(segment, out var next))
+                    element = next;
+                else if (element.ValueKind == JsonValueKind.Array && int.TryParse(segment, out var idx) && idx >= 0 && idx < element.GetArrayLength())
+                    element = element[idx];
+                else
+                    return null;
+            }
+
+            return element.ValueKind switch
+            {
+                JsonValueKind.String => element.GetString() ?? "",
+                JsonValueKind.Number => element.GetRawText(),
+                JsonValueKind.True or JsonValueKind.False => element.GetRawText(),
+                JsonValueKind.Null => "",
+                _ => element.GetRawText()
+            };
+        }
+        catch
+        {
+            return null;
+        }
     }
 }

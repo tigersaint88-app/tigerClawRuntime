@@ -18,6 +18,12 @@ namespace TigerClaw.Skills;
 /// </summary>
 public class EmailFetchUnreadSkill : Core.ISkill
 {
+    static EmailFetchUnreadSkill()
+    {
+        // GB2312/GBK/GB18030 等不在 .NET Core 默认编码集中；未注册时 MimeKit 解码主题/正文会乱码。
+        Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
+    }
+
     public const string DryRunEnvVar = "TIGERCLAW_EMAIL_DRY_RUN";
 
     public string Id => "email.fetch_unread";
@@ -38,6 +44,9 @@ public class EmailFetchUnreadSkill : Core.ISkill
     {
         var maxMessages = ReadIntInput(inputs, "maxMessages", 50);
         var folderName = ReadStringInput(inputs, "folder") ?? "INBOX";
+        var maxPlainChars = ReadBodyCap(inputs, "maxPlainChars", 32_768);
+        var maxHtmlChars = ReadBodyCap(inputs, "maxHtmlChars", 65_536);
+        var digestBodyCap = ReadBodyCap(inputs, "digestBodyCharsPerMail", 4_096);
 
         var accountId = await ResolveAccountIdAsync(context, cancellationToken).ConfigureAwait(false);
         if (string.IsNullOrWhiteSpace(accountId))
@@ -65,7 +74,7 @@ public class EmailFetchUnreadSkill : Core.ISkill
                 issues.Add(MissingPref($"email.accounts.{accountId}.host", "缺少 IMAP 主机名。"));
             if (string.IsNullOrWhiteSpace(username))
                 issues.Add(MissingPref($"email.accounts.{accountId}.username", "缺少 IMAP 用户名。"));
-            var msg = "邮箱账号配置不完整（host 或 username）。";
+            var msg = "邮箱尚未配置或信息不完整：请先设置 IMAP 主机与用户名（preferences 或演示页）。";
             return WaitingForConfig(TigerClawErrorCodes.PrerequisiteMissing, msg, issues.Count > 0 ? issues.ToArray() : Array.Empty<PrerequisiteIssue>());
         }
 
@@ -97,9 +106,24 @@ public class EmailFetchUnreadSkill : Core.ISkill
                     port,
                     count = 0,
                     emails = Array.Empty<object>(),
+                    digestText = "[dry-run] Skipped IMAP; no mail bodies to summarize.",
                     message = "TIGERCLAW_EMAIL_DRY_RUN is set; skipped IMAP connection."
                 }
             };
+        }
+
+        if (EmailConfigValidation.IsPlaceholderHost(host))
+        {
+            var hostKey = $"email.accounts.{accountId}.host";
+            var msg = "邮箱尚未完成有效配置：不能使用示例/占位域名作为 IMAP 主机（已跳过连接）。请修改「" + hostKey + "」为真实服务商地址，或先清除邮件配置后重新填写。";
+            return WaitingForConfig(TigerClawErrorCodes.PrerequisiteMissing, msg, new PrerequisiteIssue
+            {
+                Kind = "preference",
+                Key = hostKey,
+                Code = "placeholder_imap_host",
+                Message = msg,
+                InteractionHint = "请删除示例域名（如 imap.example.com），改为真实 IMAP 主机名，保存后重试。"
+            });
         }
 
         var useSsl = await ReadUseSslAsync(accountId, port, context.UserId, cancellationToken).ConfigureAwait(false);
@@ -124,28 +148,48 @@ public class EmailFetchUnreadSkill : Core.ISkill
 
             var uids = await folder.SearchAsync(SearchQuery.NotSeen, cancellationToken).ConfigureAwait(false);
             var list = new List<object>();
+            var digestChunks = new List<string>();
             var take = Math.Min(maxMessages, uids.Count);
             var start = Math.Max(0, uids.Count - take);
             for (var i = start; i < uids.Count; i++)
             {
                 cancellationToken.ThrowIfCancellationRequested();
                 var msg = await folder.GetMessageAsync(uids[i], cancellationToken).ConfigureAwait(false);
+                var subject = msg.Subject ?? "";
+                var sender = msg.From.Mailboxes.FirstOrDefault()?.Address ?? "";
+                var date = msg.Date.UtcDateTime.ToString("O");
+                var plainFull = msg.TextBody ?? "";
+                if (string.IsNullOrEmpty(plainFull) && msg.HtmlBody != null)
+                    plainFull = StripHtml(msg.HtmlBody);
+                var plainBody = TruncateBody(plainFull, maxPlainChars);
+                var htmlBody = TruncateBody(msg.HtmlBody ?? "", maxHtmlChars);
+                var snippet = SnippetFromParts(plainFull, msg.HtmlBody, 800);
+                var digestPlain = TruncateBody(string.IsNullOrEmpty(msg.TextBody) && msg.HtmlBody != null ? StripHtml(msg.HtmlBody) : msg.TextBody ?? "", digestBodyCap);
+                digestChunks.Add($"Subject: {subject}\nFrom: {sender}\nDate: {date}\n\n{digestPlain}");
                 list.Add(new
                 {
-                    subject = msg.Subject ?? "",
-                    sender = msg.From.Mailboxes.FirstOrDefault()?.Address ?? "",
-                    date = msg.Date.UtcDateTime.ToString("O"),
-                    bodySnippet = Snippet(msg, 800)
+                    subject,
+                    sender,
+                    date,
+                    bodySnippet = snippet,
+                    textBody = plainBody,
+                    htmlBody,
+                    attachments = ListAttachments(msg)
                 });
             }
 
             await client.DisconnectAsync(true, cancellationToken).ConfigureAwait(false);
 
+            var digestText = digestChunks.Count == 0
+                ? "(无未读邮件)"
+                : string.Join("\n\n---\n\n", digestChunks);
+            digestText = TruncateBody(digestText, 120_000);
+
             _logger.LogInformation("email.fetch_unread fetched {Count} unseen (cap {Cap}) account={Account} taskId={TaskId}", list.Count, maxMessages, accountId, context.TaskId);
             return new SkillExecutionResult
             {
                 Success = true,
-                Output = new { count = list.Count, unseenTotal = uids.Count, emails = list }
+                Output = new { count = list.Count, unseenTotal = uids.Count, digestText, emails = list }
             };
         }
         catch (Exception ex)
@@ -163,8 +207,8 @@ public class EmailFetchUnreadSkill : Core.ISkill
                     Key = hostKey,
                     Code = "imap_connect_failed",
                     Message = msg,
-                    InteractionHint = IsPlaceholderImapHost(host)
-                        ? $"「{host}」为示例占位主机，无法解析。请将「{hostKey}」改为真实服务商的 IMAP 地址（如 Gmail: imap.gmail.com），保存后重新运行工作流。"
+                    InteractionHint = EmailConfigValidation.IsPlaceholderHost(host)
+                        ? $"「{host}」为示例占位主机。请将「{hostKey}」改为真实 IMAP 地址，保存后重新运行工作流。"
                         : $"请确认「{hostKey}」为可解析、可访问的真实 IMAP 主机，并检查端口与 useSsl；修改 preferences 后重新运行工作流。"
                 });
             }
@@ -189,15 +233,6 @@ public class EmailFetchUnreadSkill : Core.ISkill
         }
     }
 
-    private static bool IsPlaceholderImapHost(string host)
-    {
-        var h = (host ?? "").Trim();
-        return h.Equals("imap.example.com", StringComparison.OrdinalIgnoreCase)
-               || h.EndsWith(".example.com", StringComparison.OrdinalIgnoreCase)
-               || h.EndsWith(".example.org", StringComparison.OrdinalIgnoreCase)
-               || h.EndsWith(".test", StringComparison.OrdinalIgnoreCase);
-    }
-
     private static bool IsDnsOrTcpFailure(Exception ex)
     {
         for (var e = ex; e != null; e = e.InnerException!)
@@ -219,7 +254,8 @@ public class EmailFetchUnreadSkill : Core.ISkill
         Key = key,
         Code = "missing_or_invalid_preference",
         Message = message,
-        InteractionHint = $"请通过 POST /memory/preferences 写入「{key}」，然后重新运行同一工作流。"
+        InteractionHint = $"请通过 POST /memory/preferences 写入「{key}」，然后重新运行同一工作流。",
+        MaskKeyInUi = PrerequisiteSensitive.ShouldMaskPreferenceKey(key)
     };
 
     private static SkillExecutionResult WaitingForConfig(string errorCode, string message, params PrerequisiteIssue[] issues)
@@ -292,14 +328,89 @@ public class EmailFetchUnreadSkill : Core.ISkill
         return string.IsNullOrWhiteSpace(s) ? null : s.Trim();
     }
 
-    private static string Snippet(MimeMessage msg, int maxLen)
+    private static int ReadBodyCap(IReadOnlyDictionary<string, object?> inputs, string key, int defaultValue)
     {
-        var text = msg.TextBody;
+        if (!inputs.TryGetValue(key, out var v) || v == null) return defaultValue;
+        if (v is int i) return Math.Clamp(i, 0, 512_000);
+        if (int.TryParse(v.ToString(), out var n)) return Math.Clamp(n, 0, 512_000);
+        return defaultValue;
+    }
+
+    private static string TruncateBody(string text, int maxLen)
+    {
+        if (string.IsNullOrEmpty(text)) return "";
+        text = text.Replace("\r\n", "\n");
+        if (maxLen <= 0 || text.Length <= maxLen) return text;
+        return text[..maxLen] + "…";
+    }
+
+    private static string SnippetFromParts(string? plain, string? html, int maxLen)
+    {
+        var text = plain;
         if (string.IsNullOrEmpty(text))
-            text = msg.HtmlBody != null ? StripHtml(msg.HtmlBody) : "";
+            text = html != null ? StripHtml(html) : "";
         if (string.IsNullOrEmpty(text)) return "";
         text = text.Replace("\r\n", "\n").Trim();
         return text.Length <= maxLen ? text : text[..maxLen] + "…";
+    }
+
+    private static object[] ListAttachments(MimeMessage msg)
+    {
+        var list = new List<object>();
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var part in msg.BodyParts.OfType<MimePart>())
+        {
+            var mime = part.ContentType?.MimeType ?? "";
+            if ((mime.Equals("text/plain", StringComparison.OrdinalIgnoreCase) || mime.Equals("text/html", StringComparison.OrdinalIgnoreCase))
+                && string.IsNullOrEmpty(part.FileName)
+                && part.ContentDisposition?.IsAttachment != true)
+                continue;
+
+            var cd = part.ContentDisposition;
+            var isInline = string.Equals(cd?.Disposition, "inline", StringComparison.OrdinalIgnoreCase);
+            var isAttach = cd?.IsAttachment == true
+                || !string.IsNullOrEmpty(part.FileName)
+                || (isInline && mime.StartsWith("image/", StringComparison.OrdinalIgnoreCase));
+
+            if (!isAttach && string.IsNullOrEmpty(part.FileName)) continue;
+
+            long size = TryPartOctets(part);
+            var name = part.FileName ?? part.ContentType?.Name
+                ?? (mime.StartsWith("image/", StringComparison.OrdinalIgnoreCase) ? "(inline image)" : "unnamed");
+            var cid = part.ContentId;
+            var cidNorm = string.IsNullOrEmpty(cid) ? "" : cid.Trim().TrimStart('<').TrimEnd('>');
+            var dedupe = name + "|" + cidNorm + "|" + size + "|" + mime;
+            if (!seen.Add(dedupe)) continue;
+
+            list.Add(new
+            {
+                fileName = name,
+                mimeType = string.IsNullOrEmpty(mime) ? "application/octet-stream" : mime,
+                sizeBytes = size,
+                isInline,
+                contentId = string.IsNullOrEmpty(cidNorm) ? null : cidNorm
+            });
+        }
+
+        return list.ToArray();
+    }
+
+    private static long TryPartOctets(MimePart part)
+    {
+        try
+        {
+            if (part.Content?.Stream is { CanSeek: true } s)
+                return s.Length;
+            using var stream = part.Content?.Open();
+            if (stream is { CanSeek: true } s2)
+                return s2.Length;
+        }
+        catch
+        {
+            /* ignore */
+        }
+
+        return 0;
     }
 
     private static string StripHtml(string html)

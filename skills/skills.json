@@ -119,7 +119,7 @@
   {
     "id": "email.fetch_unread",
     "name": "Fetch unread emails",
-    "description": "IMAP unread (NOT SEEN) via MailKit. Preferences: email.default_account_id; email.accounts.{id}.host, .port, .username, .authProfile, .password (or email.auth_profiles.{authProfile}.password); optional .useSsl (default true except port 143). Inputs: folder (default INBOX), maxMessages (default 50). Set TIGERCLAW_EMAIL_DRY_RUN=true to skip network.",
+    "description": "IMAP unread (NOT SEEN) via MailKit. Preferences: email.default_account_id; email.accounts.{id}.host, .port, .username, .authProfile, .password (or email.auth_profiles.{authProfile}.password); optional .useSsl (default true except port 143). Inputs: folder (default INBOX), maxMessages (default 50); optional maxPlainChars, maxHtmlChars, digestBodyCharsPerMail (body size caps). Output: emails[].textBody, htmlBody, bodySnippet, attachments[] (metadata only, no file bytes); digestText for downstream summarize. Set TIGERCLAW_EMAIL_DRY_RUN=true to skip network.",
     "tags": ["email", "mailbox", "summary"],
     "riskLevel": "medium",
     "executionMode": "local",

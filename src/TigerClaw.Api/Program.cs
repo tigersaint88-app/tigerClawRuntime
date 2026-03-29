@@ -86,6 +86,18 @@ app.MapPost("/memory/preferences", async (SavePreferenceRequest req, IMemoryStor
     return Results.Ok();
 });
 
+app.MapPost("/memory/preferences/clear-email", async (ClearEmailPrefsRequest req, IMemoryStore memory) =>
+{
+    var n = await memory.Preferences.DeleteKeyPrefixAsync("email.", req.UserId);
+    return Results.Json(new { deleted = n });
+});
+
+app.MapPost("/email/provider-hint", (EmailHintRequest req) =>
+{
+    var hint = EmailProviderLookup.Lookup(req.EmailOrDomain ?? "");
+    return Results.Json(new { found = hint != null, hint });
+});
+
 await EnsureDatabaseAsync(app.Services);
 app.Run();
 
@@ -102,3 +114,5 @@ static async Task EnsureDatabaseAsync(IServiceProvider sp)
 public record RunTaskRequest(string? SessionId, string? UserId, string? InputText);
 public record RunWorkflowRequest(string? UserId, Dictionary<string, object?>? Inputs);
 public record SavePreferenceRequest(string Key, string? Value, string? UserId);
+public record ClearEmailPrefsRequest(string? UserId);
+public record EmailHintRequest(string? EmailOrDomain);

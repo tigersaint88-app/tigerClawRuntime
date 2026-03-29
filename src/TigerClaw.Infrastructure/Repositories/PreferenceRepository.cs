@@ -62,6 +62,17 @@ public class PreferenceRepository
         }).ToList();
     }
 
+    public async Task<int> DeleteKeyPrefixAsync(string keyPrefix, string? userId, CancellationToken cancellationToken = default)
+    {
+        await using var conn = new SqliteConnection(_connectionString);
+        await conn.OpenAsync(cancellationToken);
+        var uid = userId ?? "";
+        var pattern = keyPrefix.Contains('%', StringComparison.Ordinal) ? keyPrefix : keyPrefix + "%";
+        return await conn.ExecuteAsync(
+            "DELETE FROM preferences WHERE user_id = @uid AND key LIKE @pat",
+            new { uid, pat = pattern });
+    }
+
     private static string ResolveConnectionString(DatabaseOptions opts)
     {
         var cs = opts.ConnectionString;

@@ -30,6 +30,9 @@ public class PreflightCheckTests
 
         public Task<IReadOnlyList<UserPreference>> ListAllAsync(string? userId = null, CancellationToken cancellationToken = default)
             => Task.FromResult<IReadOnlyList<UserPreference>>(Array.Empty<UserPreference>());
+
+        public Task<int> DeleteKeyPrefixAsync(string keyPrefix, string? userId = null, CancellationToken cancellationToken = default)
+            => Task.FromResult(0);
     }
 
     static ResourceSnapshot MinimalSnapshot()

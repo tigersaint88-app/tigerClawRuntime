@@ -10,6 +10,20 @@
 
 TigerClaw Runtime V1 is a **local-first, low-token, pluggable-model, workflow-reusable agent runtime** with **long-term memory** (SQLite), **CLI + REST API**, and **Capability Resolution v1** (preflight checks, policy blocks, `bins` / `anybins` manifests).
 
+### V1 (shipped) vs target (roadmap)
+
+| Topic | V1 (this repo) | Target / later |
+|--------|----------------|----------------|
+| **Intents per message** | **One** `RoutingResult` per request (rules: first keyword match; optional LLM: one JSON intent). | Multiple intents from a single utterance, ordered or parallel plans. |
+| **Orchestration** | **One workflow** per run; step order = that workflow’s `steps` in JSON. Not a chain of multiple intents. | Cross-intent pipelines, dynamic DAG, or planner-generated multi-workflow runs. |
+| **Skills** | Registry + workflow `skillId`; prerequisites + **capability preflight** each step. | Richer skill marketplace contracts, optional remote skills. |
+| **Human / config gaps** | `TaskResponse.outcome` = `needs_user_input`, `issues`, `suggestedPreferenceKeys`, `remediationHint`; client retries after `POST /memory/preferences`. | Session-scoped wizards, optional server-side retry budgets. |
+| **Email / IMAP** | MailKit, SQLite prefs, placeholder hosts rejected before connect; **`TIGERCLAW_EMAIL_DRY_RUN`**; built-in **`EmailProviderLookup`** + `POST /email/provider-hint` (not live web search). | LLM or online autodiscover, OAuth providers, bounded auto-retry (e.g. 3) with policy. |
+| **Interrupt** | No first-class “cancel running task” API; user stops by not re-invoking. | Explicit cancel, checkpoints, resume tokens. |
+| **CLI parity** | See `doc/TigerClaw_CLI_Compatibility_Spec_v1.md` — several groups are stubs. | Align with OpenClaw-style CLI surface where desired. |
+
+V1 is **intentionally** bounded: predictable, local-first, and easy to host. The table above is the contract for what is **implemented today** versus **direction**, not a commitment schedule.
+
 ### Requirements
 
 - [.NET 8 SDK](https://dotnet.microsoft.com/download/dotnet/8.0)
@@ -75,7 +89,7 @@ dotnet run --project src/TigerClaw.Api/TigerClaw.Api.csproj
 
 Default URLs: `http://localhost:5000` or `http://localhost:5263` (see `launchSettings`).
 
-**Why does CLI hit `imap.example.com`?** The CLI does **not** inject that host. It is read from SQLite (`data/tigerclaw.db`) preferences—often left over from tests or copy-paste. Use `GET /memory/preferences?userId=local-user` (CLI user) or clear/update those keys. **Static demo UI:** after `dotnet run` the API serves **`/email-demo.html`** (step-by-step: load prefs → save IMAP keys → run `daily_mail_digest`).
+**Why does CLI hit `imap.example.com`?** The CLI does **not** inject that host. It is read from SQLite (`data/tigerclaw.db`) preferences—often left over from tests or copy-paste. Use `GET /memory/preferences?userId=local-user` (CLI user) or clear/update those keys. **Static demo UI:** after `dotnet run` the API serves **`/email-demo.html`** — TigerClaw chat-style flow (check workflow → show missing issues → email → built-in IMAP hint → password → retry → scroll results). **Clear mail prefs:** `POST /memory/preferences/clear-email` with `{ "userId": "local-user" }`. **IMAP hint (built-in domains):** `POST /email/provider-hint` with `{ "emailOrDomain": "a@sina.com" }`.
 
 | Method | Path | Description |
 |--------|------|-------------|
@@ -88,6 +102,8 @@ Default URLs: `http://localhost:5000` or `http://localhost:5263` (see `launchSet
 | POST | `/memory/preferences` | Upsert preference |
 
 `POST /workflows/{id}/run` and **`POST /tasks/run`** responses share the same shape. Branch on **`outcome`**: `completed` | `failed` | **`needs_user_input`**. When **`needs_user_input`** (aliases: **`waitingHuman`**, **`requiresUserInput`**), the client must show a form: use **`issues`**, **`suggestedPreferenceKeys`**, **`interactionMessage`**, and **`remediationHint`**, then **`POST /memory/preferences`** (same `userId`) and re-invoke the same workflow or natural-language request. Also returned: **`errorCode`** (e.g. `PREREQUISITE_MISSING`, `CAPABILITY_NOT_MET`, `EMAIL_IMAP_CONNECT_FAILED`).
+
+**Prerequisite issues & sensitive keys:** Each item in **`issues`** may include **`maskKeyInUi`** (boolean). When `true`, interactive clients should **not** show the raw **`key`** by default—display a mask (e.g. `********`) and offer a **reveal** control (the static demo uses an eye button). The runtime sets this flag from heuristics in **`PrerequisiteSensitive`** (e.g. preference keys ending with `.password`, names containing `apikey` / `api_key`, env vars containing `PASSWORD`, `SECRET`, `API_KEY`, or `TOKEN`). Skills may set **`MaskKeyInUi`** explicitly on **`PrerequisiteIssue`** when declaring missing prefs. **`suggestedPreferenceKeys`** remains a flat list for backward compatibility; use **`issues`** for per-key masking behavior.
 
 ### Capabilities & policy
 
@@ -129,6 +145,20 @@ MIT
 
 TigerClaw Runtime V1 是一个 **本地优先、低 token、可插拔模型、可复用 workflow、具备长期记忆** 的 Agent 运行时，提供 **CLI 与 REST API**，并内置 **Capability Resolution v1**（能力预检、策略封禁、`bins` / `anybins` 清单注册）。
 
+### V1（已实现）与目标（路线图）
+
+| 主题 | V1（本仓库） | 目标 / 后续 |
+|------|-------------|------------|
+| **单句多意图** | 每次请求 **一个** `RoutingResult`（规则：关键词先匹配；可选 LLM：**一行 JSON、一个 intent**）。 | 单段话解析 **多个 intent** 并排序或并行执行。 |
+| **编排** | 一次运行对应 **一个 workflow**；执行顺序 = 该 workflow JSON 里 **`steps` 顺序**，不是「多 intent 流水线」。 | 跨 intent 编排、动态 DAG、或由规划器串联多个 workflow。 |
+| **Skill** | 注册表 + workflow 中 `skillId`；每步做 **prerequisites + 能力预检**。 | 更丰富的 skill 契约、可选远程 skill 等。 |
+| **人前/配置补全** | `outcome=needs_user_input`，附 `issues`、`suggestedPreferenceKeys`、`remediationHint`；客户端改 preferences 后 **再次调用**。 | 会话级向导、服务端自动重试次数上限等。 |
+| **邮件 IMAP** | MailKit + SQLite；占位域名 **连接前拦截**；**`TIGERCLAW_EMAIL_DRY_RUN`**；内置 **`EmailProviderLookup`** + `POST /email/provider-hint`（**非**实时联网检索）。 | LLM/在线 autodiscover、OAuth、连接失败 **有限次**（如 3 次）策略化重试等。 |
+| **中断** | 无通用「取消运行中任务」API；用户 **不再调用** 即停止。 | 显式 cancel、checkpoint、resume。 |
+| **CLI** | 见 `doc/TigerClaw_CLI_Compatibility_Spec_v1.md`，部分命令组为 stub。 | 按需对齐 OpenClaw 式 CLI 能力面。 |
+
+V1 **有意**保持边界清晰：易部署、行为可预期。上表区分 **当前实现** 与 **方向**，时间表不作承诺。
+
 ### 环境要求
 
 - [.NET 8 SDK](https://dotnet.microsoft.com/download/dotnet/8.0)
@@ -155,7 +185,7 @@ dotnet build
 
 - **存储位置**：SQLite **`data/tigerclaw.db`** 表 **`preferences`**，键名如 **`email.default_account_id`**、`email.accounts.{账号id}.host` / `port` / `username` / `authProfile` / `password` 等（与 CLI `memory preference set`、API `POST /memory/preferences` 一致）。
 - **不是 CLI 自动写的**：`dotnet run ... -- run "读取今天未读邮件…"` 只把 **用户 Id 固定为 `local-user`** 并路由到 workflow **`daily_mail_digest`**，不会填入 `imap.example.com`。若出现该主机，多半是**之前集成测试、文档示例或手动 `memory preference set`** 写入的同一数据库。
-- **演示界面**：启动 API 后浏览器打开 **`http://localhost:5263/email-demo.html`**（见 `src/TigerClaw.Api/wwwroot/`），可按「查看 → 配置 → 运行 workflow」走通全流程。
+- **演示界面**：启动 API 后打开 **`http://localhost:5263/email-demo.html`**（`wwwroot/`）。**TigerClaw 对话流**：运行检查 → 列出欠缺项 → 输入邮箱 → **内置域名 IMAP 表**（非实时联网）→ 输入密码 → 再次执行 → 底部滚动展示未读与摘要。工具栏可 **清除邮件配置**：`POST /memory/preferences/clear-email`；查域名提示：`POST /email/provider-hint`。
 
 ### 命令行（CLI）
 
@@ -211,6 +241,8 @@ dotnet run --project src/TigerClaw.Api/TigerClaw.Api.csproj
 | POST | `/memory/preferences` | 保存 preference |
 
 **`POST /workflows/{id}/run`** 与 **`POST /tasks/run`** 返回结构一致。请以前端分支字段 **`outcome`** 为准：`completed` | `failed` | **`needs_user_input`**。为 **`needs_user_input`** 时（**`waitingHuman` / `requiresUserInput`** 同为 true），必须据 **`issues`**、**`suggestedPreferenceKeys`**、**`interactionMessage`**、**`remediationHint`** 展示表单，**`POST /memory/preferences`**（同一 `userId`）后再**重试同一请求**。另有 **`errorCode`** 等字段。
+
+**前置条件与敏感键名：** **`issues`** 中每一项可含 **`maskKeyInUi`**（布尔）。为 `true` 时，交互式客户端默认应用 **`*` 掩码**展示 **`key`**，并提供 **「眼睛」切换**显示完整键名（静态演示页 **`/email-demo.html`** 已实现；输入邮箱密码步骤下输入框为 `password` 类型，同样有眼睛切换明文）。服务端依据 **`PrerequisiteSensitive`** 启发式设置（例如 preference 键名以 **`.password`** 结尾、含 **`apikey` / `api_key`**；环境变量名含 **PASSWORD / SECRET / API_KEY / TOKEN** 等）。各 skill 也可在构造 **`PrerequisiteIssue`** 时显式设置 **`MaskKeyInUi`**。**`suggestedPreferenceKeys`** 仍为扁平列表；需要按项掩码时请读 **`issues`**。
 
 ### 能力与策略
 

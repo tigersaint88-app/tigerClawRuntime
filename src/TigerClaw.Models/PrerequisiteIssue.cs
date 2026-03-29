@@ -16,4 +16,10 @@ public record PrerequisiteIssue
 
     /// <summary>Default text for interactive clients (what to ask the user).</summary>
     public string? InteractionHint { get; init; }
+
+    /// <summary>
+    /// When true, clients should show <see cref="Key"/> (and any value typed for that key) masked (e.g. <c>********</c>) until the user toggles reveal.
+    /// Set for password / secret preference keys; see <see cref="PrerequisiteSensitive"/>.
+    /// </summary>
+    public bool MaskKeyInUi { get; init; }
 }
